@@ -63,6 +63,53 @@ def prepare_cnn_training_data(
     return X_nhwc, y_nhwc
 
 
+def prepare_convlstm_training_data(
+    arrays: dict[str, np.ndarray],
+    y: np.ndarray,
+    baseline: np.ndarray | None = None,
+    eps: float = 1e-6,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """
+    Prepare a sequence tensor for ConvLSTM models.
+
+    Each past step receives channels:
+    - CSI at that past time
+    - GHI at that past time
+    - CLS at that past time
+    - SZA/SAA at that past time when available
+
+    Output shape:
+        X: (n, 4, height, width, channels)
+        y: (n, height, width, horizons)
+    """
+    ghi = np.asarray(arrays["GHI"], dtype=np.float32)
+    cls = np.asarray(arrays["CLS"], dtype=np.float32)
+    if ghi.ndim != 4 or cls.ndim != 4:
+        raise ValueError("Expected GHI and CLS arrays with shape (n, t, h, w).")
+
+    n_past = ghi.shape[1]
+    cls_past = cls[:, :n_past]
+    csi = ghi / np.maximum(cls_past, eps)
+
+    channel_blocks = [csi, ghi, cls_past]
+    channel_names = ["CSI", "GHI", "CLS"]
+
+    for name in ("SZA", "SAA"):
+        if name in arrays:
+            values = np.asarray(arrays[name], dtype=np.float32)[:, :n_past]
+            if np.nanmax(np.abs(values)) > 2 * np.pi + 1:
+                values = np.deg2rad(values)
+            channel_blocks.extend([np.sin(values).astype(np.float32), np.cos(values).astype(np.float32)])
+            channel_names.extend([f"{name}_sin", f"{name}_cos"])
+
+    X = np.stack(channel_blocks, axis=-1)
+    target = np.asarray(y, dtype=np.float32)
+    if baseline is not None:
+        target = target - np.asarray(baseline, dtype=np.float32)
+    y_nhwc = target_to_channels_last(target)
+    return X.astype(np.float32), y_nhwc.astype(np.float32), channel_names
+
+
 def build_small_residual_cnn(
     input_shape: tuple[int, int, int],
     n_horizons: int = 4,
@@ -85,6 +132,56 @@ def build_small_residual_cnn(
     x = tf.keras.layers.Conv2D(32, 3, padding="same", activation="relu")(inputs)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.Conv2D(32, 3, padding="same", activation="relu")(x)
+    x = tf.keras.layers.Conv2D(16, 3, padding="same", activation="relu")(x)
+    outputs = tf.keras.layers.Conv2D(n_horizons, 1, padding="same", activation="linear")(x)
+
+    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        loss="mse",
+        metrics=[tf.keras.metrics.RootMeanSquaredError(name="rmse"), "mae"],
+    )
+    return model
+
+
+def build_convlstm_residual_model(
+    input_shape: tuple[int, int, int, int],
+    n_horizons: int = 4,
+    learning_rate: float = 1e-3,
+):
+    """
+    Build a compact ConvLSTM model for spatio-temporal residual forecasting.
+
+    The input shape is (time, height, width, channels). The model predicts
+    residual GHI maps with shape (height, width, n_horizons).
+    """
+    try:
+        import tensorflow as tf
+    except ImportError as exc:
+        raise ImportError(
+            "TensorFlow is required for build_convlstm_residual_model. "
+            "The notebook keeps an MLP fallback for environments without it."
+        ) from exc
+
+    inputs = tf.keras.Input(shape=input_shape)
+    x = tf.keras.layers.ConvLSTM2D(
+        filters=24,
+        kernel_size=3,
+        padding="same",
+        return_sequences=True,
+        activation="tanh",
+    )(inputs)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.ConvLSTM2D(
+        filters=24,
+        kernel_size=3,
+        padding="same",
+        return_sequences=False,
+        activation="tanh",
+    )(x)
+    skip = tf.keras.layers.Conv2D(16, 1, padding="same", activation="relu")(x)
+    x = tf.keras.layers.Conv2D(32, 3, padding="same", activation="relu")(x)
+    x = tf.keras.layers.Concatenate()([x, skip])
     x = tf.keras.layers.Conv2D(16, 3, padding="same", activation="relu")(x)
     outputs = tf.keras.layers.Conv2D(n_horizons, 1, padding="same", activation="linear")(x)
 
@@ -148,4 +245,3 @@ def add_residual_mean_to_baseline(
         )
     y_pred = baseline + residual_mean_pred[:, :, np.newaxis, np.newaxis]
     return np.maximum(y_pred, clip_min).astype(np.float32)
-

@@ -142,3 +142,106 @@ def plot_error_analysis(y_true, y_pred, title="Analyse des Erreurs"):
     
     plt.suptitle(title)
     plt.show()
+
+
+def plot_forecast_triplet(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    sample_idx: int = 0,
+    horizon_idx: int = 0,
+    model_name: str = "model",
+    cmap: str = "inferno",
+):
+    """Plot truth, prediction and error for one sample/horizon."""
+    truth = np.asarray(y_true)[sample_idx, horizon_idx]
+    pred = np.asarray(y_pred)[sample_idx, horizon_idx]
+    error = pred - truth
+
+    vmin = float(np.nanpercentile(np.stack([truth, pred]), 2))
+    vmax = float(np.nanpercentile(np.stack([truth, pred]), 98))
+    err_abs = float(np.nanpercentile(np.abs(error), 98))
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4), constrained_layout=True)
+    images = [
+        axes[0].imshow(truth, cmap=cmap, vmin=vmin, vmax=vmax),
+        axes[1].imshow(pred, cmap=cmap, vmin=vmin, vmax=vmax),
+        axes[2].imshow(error, cmap="coolwarm", vmin=-err_abs, vmax=err_abs),
+    ]
+    titles = [
+        "Verite",
+        f"Prediction - {model_name}",
+        "Erreur prediction - verite",
+    ]
+    for ax, title in zip(axes, titles):
+        ax.set_title(title)
+        ax.axis("off")
+    fig.colorbar(images[0], ax=axes[:2].tolist(), fraction=0.035, pad=0.02)
+    fig.colorbar(images[2], ax=axes[2], fraction=0.046, pad=0.04)
+    return fig, axes
+
+
+def plot_motion_summary(
+    motion_features: pd.DataFrame,
+    sample_idx: int = 0,
+    ax=None,
+    title: str = "Vecteur de mouvement estime",
+):
+    """Plot one sample-level cloud-motion vector."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(4, 4))
+    else:
+        fig = ax.figure
+
+    row = motion_features.iloc[sample_idx]
+    dx = float(row.get("motion_dx_last", 0.0))
+    dy = float(row.get("motion_dy_last", 0.0))
+    ax.quiver([0], [0], [dx], [dy], angles="xy", scale_units="xy", scale=1, width=0.012)
+    lim = max(1.0, abs(dx), abs(dy)) * 1.25
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.axhline(0, color="0.8", linewidth=1)
+    ax.axvline(0, color="0.8", linewidth=1)
+    ax.set_xlabel("dx pixels / pas de 15 min")
+    ax.set_ylabel("dy pixels / pas de 15 min")
+    ax.set_title(title)
+    ax.set_aspect("equal", adjustable="box")
+    return fig, ax
+
+
+def plot_metric_by_horizon(
+    diagnostics_by_horizon: pd.DataFrame,
+    models: list[str] | None = None,
+    metric: str = "RMSE",
+    title: str | None = None,
+):
+    """Plot a horizon-wise metric for selected models."""
+    df = diagnostics_by_horizon.copy()
+    if models is not None:
+        df = df[df["model"].isin(models)]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for model_name, part in df.groupby("model"):
+        part = part.sort_values("horizon_min")
+        ax.plot(part["horizon_min"], part[metric], marker="o", label=model_name)
+    ax.set_xlabel("Horizon de prevision (minutes)")
+    ax.set_ylabel(metric)
+    ax.set_title(title or f"{metric} par horizon")
+    ax.legend()
+    plt.tight_layout()
+    return fig, ax
+
+
+def plot_cluster_metric(
+    cluster_metrics: pd.DataFrame,
+    metric: str = "RMSE",
+    title: str | None = None,
+):
+    """Plot model performance by interpreted cluster/regime."""
+    pivot = cluster_metrics.pivot_table(index="regime", columns="model", values=metric, aggfunc="mean")
+    fig, ax = plt.subplots(figsize=(9, 5))
+    pivot.plot(kind="bar", ax=ax)
+    ax.set_ylabel(metric)
+    ax.set_title(title or f"{metric} par regime meteo")
+    ax.tick_params(axis="x", rotation=30)
+    plt.tight_layout()
+    return fig, ax

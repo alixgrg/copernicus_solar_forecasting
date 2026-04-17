@@ -1,0 +1,16 @@
+{
+  "model_name": "hist_gb_residual_csi",
+  "slug": "hist_gb_residual_csi",
+  "backend": "final_beta_local",
+  "profile": "dev",
+  "split_name": "validation",
+  "reference_name": "persistence_csi",
+  "prediction_shape": [
+    7,
+    4,
+    51,
+    51
+  ],
+  "created_at_utc": "2026-04-17T16:13:28.222677+00:00",
+  "notebook": "Copernicus_notebook_final_beta.ipynb"
+}

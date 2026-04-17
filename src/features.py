@@ -230,3 +230,243 @@ def build_advanced_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
         features[f"sza_future_t+{15+t*15}"] = sza_future[:, t].mean(axis=(1, 2))
 
     return pd.DataFrame(features)
+
+
+def build_exogenous_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
+    """
+    Build optional exogenous features such as wind components when available.
+
+    The public Copernicus files used in this project expose only GHI, CLS, SZA
+    and SAA. This helper keeps the notebook ready for richer variants of the
+    data without failing when U/V wind fields are absent.
+    """
+    wind_aliases = {
+        "U": ("U", "u", "WIND_U", "wind_u", "U10", "u10"),
+        "V": ("V", "v", "WIND_V", "wind_v", "V10", "v10"),
+    }
+    features: dict[str, np.ndarray] = {}
+
+    selected = {}
+    for canonical, aliases in wind_aliases.items():
+        for alias in aliases:
+            if alias in arrays:
+                selected[canonical] = np.asarray(arrays[alias], dtype=np.float32)
+                break
+
+    for name, values in selected.items():
+        if values.ndim == 4:
+            mean_by_t = values.mean(axis=(2, 3))
+            std_by_t = values.std(axis=(2, 3))
+            for t in range(values.shape[1]):
+                features[f"wind_{name.lower()}_mean_t{t}"] = mean_by_t[:, t]
+                features[f"wind_{name.lower()}_std_t{t}"] = std_by_t[:, t]
+            features[f"wind_{name.lower()}_mean_global"] = values.mean(axis=(1, 2, 3))
+            features[f"wind_{name.lower()}_std_global"] = values.std(axis=(1, 2, 3))
+        elif values.ndim == 2:
+            for t in range(values.shape[1]):
+                features[f"wind_{name.lower()}_t{t}"] = values[:, t]
+            features[f"wind_{name.lower()}_mean_global"] = values.mean(axis=1)
+        elif values.ndim == 1:
+            features[f"wind_{name.lower()}"] = values
+
+    if "U" in selected and "V" in selected:
+        u = selected["U"]
+        v = selected["V"]
+        if u.shape == v.shape:
+            speed = np.sqrt(u**2 + v**2)
+            if speed.ndim == 4:
+                speed_mean = speed.mean(axis=(2, 3))
+                for t in range(speed.shape[1]):
+                    features[f"wind_speed_mean_t{t}"] = speed_mean[:, t]
+                direction = np.arctan2(v.mean(axis=(1, 2, 3)), u.mean(axis=(1, 2, 3)))
+            elif speed.ndim == 2:
+                for t in range(speed.shape[1]):
+                    features[f"wind_speed_t{t}"] = speed[:, t]
+                direction = np.arctan2(v.mean(axis=1), u.mean(axis=1))
+            else:
+                direction = np.arctan2(v, u)
+            features["wind_direction_sin"] = np.sin(direction)
+            features["wind_direction_cos"] = np.cos(direction)
+
+    return pd.DataFrame(features)
+
+
+def _quadrant_slices(h: int, w: int, n_rows: int = 2, n_cols: int = 2):
+    h_edges = np.linspace(0, h, n_rows + 1, dtype=int)
+    w_edges = np.linspace(0, w, n_cols + 1, dtype=int)
+    return [
+        (slice(h_edges[i], h_edges[i + 1]), slice(w_edges[j], w_edges[j + 1]))
+        for i in range(n_rows)
+        for j in range(n_cols)
+    ]
+
+
+def _weighted_center_of_mass(batch_maps: np.ndarray, eps: float = 1e-6) -> tuple[np.ndarray, np.ndarray]:
+    """
+    batch_maps shape: (n, h, w)
+    returns normalized (cy, cx) in [0, 1]
+    """
+    n, h, w = batch_maps.shape
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    mass = np.maximum(batch_maps, 0.0)
+    total = mass.sum(axis=(1, 2)) + eps
+
+    cy = (mass * yy[None, :, :]).sum(axis=(1, 2)) / total
+    cx = (mass * xx[None, :, :]).sum(axis=(1, 2)) / total
+
+    return cy / max(h - 1, 1), cx / max(w - 1, 1)
+
+
+def _gradient_magnitude(batch_maps: np.ndarray) -> np.ndarray:
+    """
+    batch_maps shape: (n, h, w)
+    """
+    gy = np.diff(batch_maps, axis=1, append=batch_maps[:, -1:, :])
+    gx = np.diff(batch_maps, axis=2, append=batch_maps[:, :, -1:])
+    return np.sqrt(gx**2 + gy**2)
+
+
+def _safe_corr(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> float:
+    a = a.ravel().astype(np.float64)
+    b = b.ravel().astype(np.float64)
+    a = a - a.mean()
+    b = b - b.mean()
+    denom = np.sqrt((a**2).sum()) * np.sqrt((b**2).sum()) + eps
+    return float((a * b).sum() / denom)
+
+
+def _best_shift_single(frame_prev: np.ndarray, frame_curr: np.ndarray, max_shift: int = 4):
+    """
+    Estimate a pseudo motion vector (dy, dx) by maximizing correlation
+    over small integer shifts.
+    """
+    h, w = frame_prev.shape
+    best_score = -np.inf
+    best_dy, best_dx = 0, 0
+
+    for dy in range(-max_shift, max_shift + 1):
+        for dx in range(-max_shift, max_shift + 1):
+            y0_prev = max(0, -dy)
+            y1_prev = min(h, h - dy)
+            x0_prev = max(0, -dx)
+            x1_prev = min(w, w - dx)
+
+            y0_curr = max(0, dy)
+            y1_curr = min(h, h + dy)
+            x0_curr = max(0, dx)
+            x1_curr = min(w, w + dx)
+
+            prev_crop = frame_prev[y0_prev:y1_prev, x0_prev:x1_prev]
+            curr_crop = frame_curr[y0_curr:y1_curr, x0_curr:x1_curr]
+
+            if prev_crop.size == 0 or curr_crop.size == 0:
+                continue
+
+            score = _safe_corr(prev_crop, curr_crop)
+            if score > best_score:
+                best_score = score
+                best_dy, best_dx = dy, dx
+
+    return best_dy, best_dx, best_score
+
+
+def build_spatial_dynamics_features(
+    arrays: dict[str, np.ndarray],
+    eps: float = 1e-6,
+    max_shift: int = 4,
+    downsample: int = 2,
+) -> pd.DataFrame:
+    """
+    Features explicitly aimed at cloud dynamics and local spatial structure.
+    """
+    ghi = np.asarray(arrays["GHI"], dtype=np.float32)          # (n, 4, h, w)
+    cls = np.asarray(arrays["CLS"], dtype=np.float32)[:, :4]  # past only
+    csi = ghi / np.maximum(cls, eps)
+
+    n, t, h, w = ghi.shape
+    features: dict[str, np.ndarray] = {}
+
+    # --- 1. Quadrant-by-quadrant temporal differences (t-15 -> t) ---
+    quad_slices = _quadrant_slices(h, w, n_rows=2, n_cols=2)
+    ghi_last = ghi[:, -1]
+    ghi_prev = ghi[:, -2]
+    csi_last = csi[:, -1]
+    csi_prev = csi[:, -2]
+
+    for q_idx, (hs, ws) in enumerate(quad_slices):
+        ghi_diff_q = ghi_last[:, hs, ws].mean(axis=(1, 2)) - ghi_prev[:, hs, ws].mean(axis=(1, 2))
+        csi_diff_q = csi_last[:, hs, ws].mean(axis=(1, 2)) - csi_prev[:, hs, ws].mean(axis=(1, 2))
+
+        features[f"quad{q_idx}_ghi_diff_last_minus_prev"] = ghi_diff_q
+        features[f"quad{q_idx}_csi_diff_last_minus_prev"] = csi_diff_q
+
+    # --- 2. Gradient features on the latest CSI map ---
+    grad_last = _gradient_magnitude(csi_last)
+    features["grad_csi_last_mean"] = grad_last.mean(axis=(1, 2))
+    features["grad_csi_last_std"] = grad_last.std(axis=(1, 2))
+    features["grad_csi_last_p90"] = np.quantile(grad_last.reshape(n, -1), 0.90, axis=1)
+
+    # --- 3. Centers of mass of dark / bright zones ---
+    dark_mass = np.maximum(1.0 - csi_last, 0.0)
+    bright_mass = np.maximum(csi_last, 0.0)
+
+    dark_cy, dark_cx = _weighted_center_of_mass(dark_mass)
+    bright_cy, bright_cx = _weighted_center_of_mass(bright_mass)
+
+    features["dark_com_y_last"] = dark_cy
+    features["dark_com_x_last"] = dark_cx
+    features["bright_com_y_last"] = bright_cy
+    features["bright_com_x_last"] = bright_cx
+
+    # --- 4. Pseudo motion between t-15 and t on dark cloud anomaly maps ---
+    dark_prev = np.maximum(1.0 - csi_prev, 0.0)[:, ::downsample, ::downsample]
+    dark_last_ds = np.maximum(1.0 - csi_last, 0.0)[:, ::downsample, ::downsample]
+
+    dy_list, dx_list, score_list = [], [], []
+    for i in range(n):
+        dy, dx, score = _best_shift_single(dark_prev[i], dark_last_ds[i], max_shift=max_shift)
+        dy_list.append(dy)
+        dx_list.append(dx)
+        score_list.append(score)
+
+    features["pseudo_motion_dy_t-15_to_t"] = np.asarray(dy_list, dtype=np.float32)
+    features["pseudo_motion_dx_t-15_to_t"] = np.asarray(dx_list, dtype=np.float32)
+    features["pseudo_motion_score_t-15_to_t"] = np.asarray(score_list, dtype=np.float32)
+
+    return pd.DataFrame(features)
+
+
+def build_advanced_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
+    """
+    Crée des features agrégées + spatiales/dynamiques pour booster les modèles tabulaires.
+    """
+    features = {}
+    ghi = arrays["GHI"]  # (n, 4, 51, 51)
+    cls = arrays["CLS"]  # (n, 8, 51, 51)
+
+    # 1. Statistiques Globales par frame
+    for t in range(4):
+        features[f"ghi_mean_t-{45-t*15}"] = ghi[:, t].mean(axis=(1, 2))
+        features[f"ghi_std_t-{45-t*15}"] = ghi[:, t].std(axis=(1, 2))
+
+    # 2. Dynamique globale
+    ghi_diff = ghi[:, 1:] - ghi[:, :-1]
+    for t in range(3):
+        features[f"ghi_diff_mean_t{t}"] = ghi_diff[:, t].mean(axis=(1, 2))
+        features[f"ghi_diff_std_t{t}"] = ghi_diff[:, t].std(axis=(1, 2))
+
+    # 3. CSI moyen
+    cls_past = cls[:, :4]
+    csi = ghi / (cls_past + 1e-6)
+    features["csi_last_frame_mean"] = csi[:, -1].mean(axis=(1, 2))
+    features["csi_last_frame_std"] = csi[:, -1].std(axis=(1, 2))
+
+    # 4. Position du soleil future
+    sza_future = arrays["SZA"][:, 4:]
+    for t in range(4):
+        features[f"sza_future_t+{15+t*15}"] = sza_future[:, t].mean(axis=(1, 2))
+
+    base_df = pd.DataFrame(features)
+    dyn_df = build_spatial_dynamics_features(arrays)
+
+    return pd.concat([base_df, dyn_df], axis=1)
