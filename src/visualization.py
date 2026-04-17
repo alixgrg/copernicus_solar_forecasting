@@ -1,4 +1,4 @@
-"""Visualization helpers for solar irradiance image sequences."""
+"""Outils de visualisation pour les séquences d'images d'irradiance solaire."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from src.utils import describe_numeric_array
 
 
 def time_first(array: np.ndarray, n_steps: int | None = None) -> np.ndarray:
-    """Return a 3D image sequence as (time, height, width)."""
+    """Renvoie une séquence d'images 3D au format (temps, hauteur, largeur)."""
     array = np.asarray(array)
     if array.ndim == 2:
         return array[np.newaxis, ...]
@@ -43,7 +43,7 @@ def plot_sequence(
     ncols: int | None = None,
     figsize: tuple[float, float] | None = None,
 ):
-    """Plot all frames in an image sequence."""
+    """Trace toutes les images d'une séquence."""
     frames = time_first(sequence, n_steps=n_steps)
     n_frames = frames.shape[0]
     ncols = ncols or n_frames
@@ -72,19 +72,20 @@ def plot_sequence(
 
 
 def plot_sample_overview(sample: dict[str, np.ndarray], target: np.ndarray | None = None):
+    """Trace un aperçu des variables d'un échantillon et de sa cible éventuelle."""
     fig, axes = plt.subplots(5 if target is not None else 4, 1, figsize=(16, 18))
 
     variables = [variable for variable in INPUT_VARIABLES if variable in sample]
     for ax, var in zip(axes[:4], variables):
         seq = time_first(sample[var])
         ax.imshow(seq[0], cmap="inferno")
-        ax.set_title(f"{var} - first frame")
+        ax.set_title(f"{var} - première image")
         ax.axis("off")
 
     if target is not None:
         seq = time_first(target)
         axes[-1].imshow(seq[0], cmap="inferno")
-        axes[-1].set_title("Target - first future frame")
+        axes[-1].set_title("Cible - première image future")
         axes[-1].axis("off")
 
     plt.tight_layout()
@@ -92,6 +93,7 @@ def plot_sample_overview(sample: dict[str, np.ndarray], target: np.ndarray | Non
 
 
 def plot_value_distribution(array: np.ndarray, title: str = "", bins: int = 50):
+    """Trace la distribution des valeurs finies d'un tableau."""
     values = np.asarray(array).ravel()
     values = values[np.isfinite(values)]
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -101,12 +103,12 @@ def plot_value_distribution(array: np.ndarray, title: str = "", bins: int = 50):
 
 
 def describe_array(name: str, array: np.ndarray) -> dict[str, object]:
-    """Return compact descriptive statistics for one array."""
+    """Renvoie des statistiques descriptives compactes pour un tableau."""
     return describe_numeric_array(name, array)
 
 
 def describe_sample(sample: dict[str, np.ndarray]) -> pd.DataFrame:
-    """Describe every numeric array in a loaded sample."""
+    """Décrit chaque tableau numérique d'un échantillon chargé."""
     rows = []
     for name, array in sample.items():
         if name == "datetime":
@@ -116,11 +118,13 @@ def describe_sample(sample: dict[str, np.ndarray]) -> pd.DataFrame:
 
 
 def horizon_titles(horizons: Iterable[int] = FORECAST_HORIZONS_MINUTES) -> list[str]:
+    """Construit les titres associés aux horizons de prévision."""
     return [f"t+{h} min" for h in horizons]
 
 
 
 def plot_error_analysis(y_true, y_pred, title="Analyse des Erreurs"):
+    """Trace un diagnostic visuel des erreurs de prédiction."""
     # On aplatit pour avoir tous les pixels
     y_true_flat = y_true.flatten()
     y_pred_flat = y_pred.flatten()
@@ -128,17 +132,17 @@ def plot_error_analysis(y_true, y_pred, title="Analyse des Erreurs"):
 
     fig, ax = plt.subplots(1, 2, figsize=(14, 5))
     
-    # 1. Scatter plot : Valeur réelle vs Prédite
+    # Nuage de points entre valeur réelle et valeur prédite.
     ax[0].scatter(y_true_flat[::100], y_pred_flat[::100], alpha=0.1, s=1)
-    ax[0].plot([0, 1000], [0, 1000], 'r--') # Ligne de perfection
-    ax[0].set_xlabel("GHI Réel")
-    ax[0].set_ylabel("GHI Prédit")
+    ax[0].plot([0, 1000], [0, 1000], 'r--')
+    ax[0].set_xlabel("GHI réel")
+    ax[0].set_ylabel("GHI prédit")
     ax[0].set_title("Biais du modèle")
 
-    # 2. Distribution de l'erreur
+    # Distribution de l'erreur.
     ax[1].hist(errors, bins=50, color='skyblue', edgecolor='black')
     ax[1].axvline(0, color='red', linestyle='--')
-    ax[1].set_title("Distribution de l'erreur (Ecart)")
+    ax[1].set_title("Distribution de l'erreur")
     
     plt.suptitle(title)
     plt.show()
@@ -152,7 +156,7 @@ def plot_forecast_triplet(
     model_name: str = "model",
     cmap: str = "inferno",
 ):
-    """Plot truth, prediction and error for one sample/horizon."""
+    """Trace vérité terrain, prédiction et erreur pour un échantillon et un horizon."""
     truth = np.asarray(y_true)[sample_idx, horizon_idx]
     pred = np.asarray(y_pred)[sample_idx, horizon_idx]
     error = pred - truth
@@ -168,9 +172,9 @@ def plot_forecast_triplet(
         axes[2].imshow(error, cmap="coolwarm", vmin=-err_abs, vmax=err_abs),
     ]
     titles = [
-        "Verite",
-        f"Prediction - {model_name}",
-        "Erreur prediction - verite",
+        "Vérité",
+        f"Prédiction - {model_name}",
+        "Erreur prédiction - vérité",
     ]
     for ax, title in zip(axes, titles):
         ax.set_title(title)
@@ -186,7 +190,7 @@ def plot_motion_summary(
     ax=None,
     title: str = "Vecteur de mouvement estime",
 ):
-    """Plot one sample-level cloud-motion vector."""
+    """Trace un vecteur de mouvement nuageux pour un échantillon."""
     if ax is None:
         fig, ax = plt.subplots(figsize=(4, 4))
     else:
@@ -214,7 +218,7 @@ def plot_metric_by_horizon(
     metric: str = "RMSE",
     title: str | None = None,
 ):
-    """Plot a horizon-wise metric for selected models."""
+    """Trace une métrique par horizon pour une sélection de modèles."""
     df = diagnostics_by_horizon.copy()
     if models is not None:
         df = df[df["model"].isin(models)]
@@ -223,7 +227,7 @@ def plot_metric_by_horizon(
     for model_name, part in df.groupby("model"):
         part = part.sort_values("horizon_min")
         ax.plot(part["horizon_min"], part[metric], marker="o", label=model_name)
-    ax.set_xlabel("Horizon de prevision (minutes)")
+    ax.set_xlabel("Horizon de prévision (minutes)")
     ax.set_ylabel(metric)
     ax.set_title(title or f"{metric} par horizon")
     ax.legend()
@@ -236,12 +240,12 @@ def plot_cluster_metric(
     metric: str = "RMSE",
     title: str | None = None,
 ):
-    """Plot model performance by interpreted cluster/regime."""
+    """Trace la performance des modèles par cluster ou régime interprété."""
     pivot = cluster_metrics.pivot_table(index="regime", columns="model", values=metric, aggfunc="mean")
     fig, ax = plt.subplots(figsize=(9, 5))
     pivot.plot(kind="bar", ax=ax)
     ax.set_ylabel(metric)
-    ax.set_title(title or f"{metric} par regime meteo")
+    ax.set_title(title or f"{metric} par régime météo")
     ax.tick_params(axis="x", rotation=30)
     plt.tight_layout()
     return fig, ax

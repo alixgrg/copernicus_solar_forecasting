@@ -1,4 +1,4 @@
-"""Data loading helpers for the Copernicus solar forecasting challenge."""
+"""Chargement et préparation des données du concours Copernicus."""
 
 from __future__ import annotations
 
@@ -30,8 +30,9 @@ from config import (
 )
 from src.utils import ensure_directory, ensure_exists, normalize_indices
 
+
 def npz_array_metadata(npz_path: str | Path) -> pd.DataFrame:
-    """Read array names, shapes, and dtypes from an .npz file without loading data."""
+    """Lit les noms, formes et types des tableaux d'un fichier .npz sans charger les données."""
     npz_path = ensure_exists(npz_path)
     records = []
 
@@ -59,6 +60,7 @@ def npz_array_metadata(npz_path: str | Path) -> pd.DataFrame:
 
 
 def _read_npy_header(array_file, version: tuple[int, int]):
+    """Lit l'en-tête d'un tableau .npy selon la version du format."""
     if version == (1, 0):
         return npy_format.read_array_header_1_0(array_file)
     if version == (2, 0):
@@ -67,7 +69,7 @@ def _read_npy_header(array_file, version: tuple[int, int]):
 
 
 def load_targets(csv_path: str | Path = Y_TRAIN_PATH, nrows: int | None = None) -> pd.DataFrame:
-    """Load the target CSV, optionally limiting the number of rows."""
+    """Charge le fichier CSV cible, avec une limite optionnelle sur le nombre de lignes."""
     csv_path = ensure_exists(csv_path)
     return pd.read_csv(csv_path, nrows=nrows)
 
@@ -76,7 +78,7 @@ def load_targets_for_indices(
     indices: Iterable[int] | int,
     csv_path: str | Path = Y_TRAIN_PATH,
 ) -> pd.DataFrame:
-    """Load selected target rows from the target CSV."""
+    """Charge des lignes ciblées du fichier CSV de sortie."""
     csv_path = ensure_exists(csv_path)
     indices = np.asarray([indices] if isinstance(indices, int) else list(indices), dtype=int)
     if len(indices) == 0:
@@ -89,7 +91,7 @@ def load_targets_for_indices(
 
 
 def targets_to_array(y: pd.DataFrame, dtype: str | np.dtype | None = "float32") -> np.ndarray:
-    """Convert the target CSV format to an array of shape (n_samples, 4, 51, 51)."""
+    """Convertit le format CSV cible en tableau de forme (n_samples, 4, 51, 51)."""
     if "id_sequence" not in y.columns:
         raise ValueError("Expected an 'id_sequence' column in the target DataFrame.")
 
@@ -102,7 +104,7 @@ def targets_to_array(y: pd.DataFrame, dtype: str | np.dtype | None = "float32") 
 
 
 def array_to_submission(y: np.ndarray, ids: Iterable[int] | None = None) -> pd.DataFrame:
-    """Convert an array of shape (n_samples, 4, 51, 51) back to submission format."""
+    """Convertit un tableau de forme (n_samples, 4, 51, 51) au format de soumission."""
     y = np.asarray(y)
     if y.ndim != 4 or y.shape[1:] != TARGET_ARRAY_SHAPE:
         raise ValueError(f"Expected y with shape (n_samples, {TARGET_ARRAY_SHAPE}), got {y.shape}.")
@@ -114,7 +116,7 @@ def array_to_submission(y: np.ndarray, ids: Iterable[int] | None = None) -> pd.D
 
 
 def get_npz_n_samples(npz_path: str | Path) -> int:
-    """Return the number of samples stored in a challenge .npz file."""
+    """Renvoie le nombre d'échantillons stockés dans un fichier .npz du concours."""
     metadata = npz_array_metadata(npz_path)
     sample_shapes = [shape for shape in metadata["shape"] if isinstance(shape, tuple) and len(shape) > 0]
     if not sample_shapes:
@@ -128,7 +130,7 @@ def load_input_batch(
     variables: Iterable[str] = INPUT_VARIABLES,
     prefer_mmap: bool = True,
 ) -> dict[str, object]:
-    """Load one or several input samples with a leading sample dimension."""
+    """Charge un ou plusieurs échantillons d'entrée avec une dimension échantillon."""
     variables = tuple(variables)
     npz_path = ensure_exists(npz_path)
     indices = normalize_indices(sample_indices, get_npz_n_samples(npz_path))
@@ -153,12 +155,13 @@ def load_input_sample(
     variables: Iterable[str] = INPUT_VARIABLES,
     prefer_mmap: bool = True,
 ) -> dict[str, np.ndarray]:
-    """Load one sample for each requested input variable from a challenge .npz file."""
+    """Charge un échantillon pour chaque variable demandée depuis un fichier .npz."""
     batch = load_input_batch(npz_path, [sample_index], variables=variables, prefer_mmap=prefer_mmap)
     sample = {variable: values[0] for variable, values in batch["X"].items()}
     if len(batch["datetime"]):
         sample["datetime"] = batch["datetime"][0]
     return sample
+
 
 def load_input_samples(
     npz_path: str | Path = X_TRAIN_PATH,
@@ -166,7 +169,7 @@ def load_input_samples(
     variables: Iterable[str] = INPUT_VARIABLES,
     prefer_mmap: bool = True,
 ) -> list[dict[str, np.ndarray]]:
-    """Load several samples for each requested input variable from a challenge .npz file."""
+    """Charge plusieurs échantillons pour chaque variable demandée depuis un fichier .npz."""
     batch = load_input_batch(npz_path, sample_indices, variables=variables, prefer_mmap=prefer_mmap)
     samples = []
     for position in range(len(batch["indices"])):
@@ -176,22 +179,25 @@ def load_input_samples(
         samples.append(sample)
     return samples
 
+
 def get_sample_from_open_arrays(
     arrays: dict[str, np.ndarray],
     sample_index: int,
     variables: Iterable[str] = INPUT_VARIABLES,
 ) -> dict[str, np.ndarray]:
+    """Extrait un échantillon depuis des tableaux déjà ouverts en mémoire."""
     variables = tuple(variables)
     return {var: np.asarray(arrays[var][sample_index]) for var in variables}
 
+
 def load_datetime_sample(npz_path: str | Path, sample_index: int = 0):
-    """Load one datetime value from the challenge .npz file."""
+    """Charge une date depuis le fichier .npz du concours."""
     values = load_datetime_samples(npz_path, [sample_index])
     return values[0] if len(values) else None
 
 
 def load_datetime_samples(npz_path: str | Path, sample_indices: Iterable[int] | int | None = None) -> np.ndarray:
-    """Load one or several datetime values from the challenge .npz file."""
+    """Charge une ou plusieurs dates depuis le fichier .npz du concours."""
     npz_path = ensure_exists(npz_path)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=".*align should be passed.*")
@@ -206,6 +212,7 @@ def load_datetime_samples(npz_path: str | Path, sample_indices: Iterable[int] | 
 
 
 def load_dataset_overview(npz_path: str | Path) -> dict[str, object]:
+    """Résume le contenu d'un fichier .npz du concours."""
     npz_path = ensure_exists(npz_path)
     metadata = npz_array_metadata(npz_path)
     return {
@@ -221,7 +228,7 @@ def open_npz_arrays_mmap(
     variables: Iterable[str] = INPUT_VARIABLES,
     mmap_mode: str = "r",
 ) -> dict[str, np.memmap]:
-    """Open numeric arrays stored inside an uncompressed .npz as memory maps."""
+    """Ouvre en mémoire mappée les tableaux numériques d'un fichier .npz non compressé."""
     npz_path = ensure_exists(npz_path)
     arrays = {}
 
@@ -253,6 +260,7 @@ def open_npz_arrays_mmap(
 
 
 def _npy_payload_offset_in_npz(npz_path: Path, info):
+    """Calcule la position du contenu .npy dans un membre du fichier .npz."""
     npy_start = _zip_member_payload_offset(npz_path, info)
     with npz_path.open("rb") as file:
         file.seek(npy_start)
@@ -263,6 +271,7 @@ def _npy_payload_offset_in_npz(npz_path: Path, info):
 
 
 def _zip_member_payload_offset(npz_path: Path, info) -> int:
+    """Calcule la position du contenu binaire d'un membre ZIP local."""
     with npz_path.open("rb") as file:
         file.seek(info.header_offset)
         local_header = file.read(30)
@@ -280,7 +289,7 @@ def extract_npz_to_npy(
     output_dir: str | Path,
     overwrite: bool = False,
 ) -> dict[str, Path]:
-    """Extract .npz members as .npy files so they can be opened with mmap_mode later."""
+    """Extrait les membres .npz en fichiers .npy ouvrables ensuite en mémoire mappée."""
     npz_path = ensure_exists(npz_path)
     output_dir = ensure_directory(output_dir)
 
@@ -310,7 +319,7 @@ def open_extracted_arrays(
     extracted_dir: str | Path,
     mmap_mode: str | None = "r",
 ) -> dict[str, np.ndarray]:
-    """Open extracted .npy arrays, using memory mapping by default."""
+    """Ouvre des tableaux .npy extraits, avec mémoire mappée par défaut."""
     extracted_dir = Path(extracted_dir)
     arrays = {}
     for path in extracted_dir.glob("*.npy"):
@@ -319,13 +328,13 @@ def open_extracted_arrays(
 
 
 def extract_roi(array: np.ndarray) -> np.ndarray:
-    """Crop the central 51x51 region from raw 81x81 image arrays."""
+    """Découpe la région centrale 51 par 51 dans des images brutes 81 par 81."""
     array = np.asarray(array)
     if array.ndim == 2:
         return array[ROI_SLICE, ROI_SLICE]
     if array.ndim == 3:
-        # works for either (H, W, T) or (T, H, W) only if handled before
-        if array.shape[0] in {4, 8}:  # time-first
+        # Fonctionne pour les formats avec temps en premier ou en dernier.
+        if array.shape[0] in {4, 8}:
             return array[:, ROI_SLICE, ROI_SLICE]
         return array[ROI_SLICE, ROI_SLICE, :]
     if array.ndim == 4:
@@ -334,7 +343,7 @@ def extract_roi(array: np.ndarray) -> np.ndarray:
 
 
 def processed_profile_dir(profile: str, split: str | None = None) -> Path:
-    """Return the directory for a processed data profile."""
+    """Renvoie le dossier associé à un profil de données prétraitées."""
     if profile not in PROCESSED_PROFILES:
         raise KeyError(f"Unknown processed profile '{profile}'. Expected one of {tuple(PROCESSED_PROFILES)}.")
     root = PROCESSED_DATA_DIR / profile
@@ -342,7 +351,7 @@ def processed_profile_dir(profile: str, split: str | None = None) -> Path:
 
 
 def processed_profile_exists(profile: str, split: str = "train") -> bool:
-    """Check whether a processed profile already exists on disk."""
+    """Indique si un profil prétraité existe déjà sur disque."""
     split_dir = processed_profile_dir(profile, split)
     return (split_dir / "manifest.json").exists() and (split_dir / "X").exists()
 
@@ -358,7 +367,7 @@ def prepare_processed_profile(
     chunk_size: int = PROCESSING_CHUNK_SIZE,
     overwrite: bool = False,
 ) -> dict[str, object]:
-    """Create a processed profile as separate .npy files for memory-mapped reuse."""
+    """Crée un profil prétraité en fichiers .npy séparés et réutilisables."""
     if profile not in PROCESSED_PROFILES:
         raise KeyError(f"Unknown processed profile '{profile}'. Expected one of {tuple(PROCESSED_PROFILES)}.")
     if split not in {"train", "test"}:
@@ -439,7 +448,7 @@ def open_processed_profile(
     variables: Iterable[str] = INPUT_VARIABLES,
     mmap_mode: str | None = "r",
 ) -> dict[str, object]:
-    """Open a processed profile from disk, using memory mapping by default."""
+    """Ouvre un profil prétraité depuis le disque, avec mémoire mappée par défaut."""
     split_dir = ensure_exists(processed_profile_dir(profile, split))
     x_dir = ensure_exists(split_dir / "X")
     manifest_path = ensure_exists(split_dir / "manifest.json")

@@ -1,4 +1,4 @@
-"""Global project configuration for the Copernicus solar forecasting project."""
+"""Configuration globale du projet de prévision solaire Copernicus."""
 
 from __future__ import annotations
 
@@ -34,14 +34,14 @@ FEATURE_EPS = 1e-6
 PROCESSED_PROFILES = {
     "dev": {
         "n_samples": 32,
-        "description": "Tiny deterministic subset for code development and notebook checks.",
+        "description": "Petit sous-ensemble déterministe pour le développement et les vérifications du notebook.",
     },
     "sample": {
         "n_samples": 256,
-        "description": "Small deterministic subset for fast tests and quick experiments.",
+        "description": "Sous-ensemble réduit pour les tests rapides et les expériences courtes.",
     },
     "full": {
         "n_samples": None,
-        "description": "Full processed dataset.",
+        "description": "Jeu de données complet prétraité.",
     },
 }

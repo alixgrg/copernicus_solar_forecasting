@@ -1,3 +1,5 @@
+"""Modèles tabulaires utilisés pour les prévisions Copernicus."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -9,6 +11,7 @@ from sklearn.multioutput import MultiOutputRegressor
 
 
 def flatten_target(y: np.ndarray) -> np.ndarray:
+    """Aplatit une cible image en matrice tabulaire par échantillon."""
     y = np.asarray(y)
     if y.ndim != 4:
         raise ValueError(f"Expected y with 4 dimensions, got shape {y.shape}.")
@@ -16,6 +19,7 @@ def flatten_target(y: np.ndarray) -> np.ndarray:
 
 
 def unflatten_target(y_flat: np.ndarray, horizon_count: int = 4, roi_size: int = 51) -> np.ndarray:
+    """Reconvertit une matrice tabulaire en tenseur de cartes de prévision."""
     y_flat = np.asarray(y_flat)
     expected = horizon_count * roi_size * roi_size
     if y_flat.ndim != 2 or y_flat.shape[1] != expected:
@@ -28,6 +32,7 @@ def prepare_tabular_inputs(
     X_val: pd.DataFrame,
     fillna_value: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Aligne les colonnes d'entraînement et validation puis remplace les valeurs manquantes."""
     common_cols = [col for col in X_train.columns if col in X_val.columns]
     X_train_np = X_train[common_cols].fillna(fillna_value).to_numpy(dtype=np.float32)
     X_val_np = X_val[common_cols].fillna(fillna_value).to_numpy(dtype=np.float32)
@@ -40,6 +45,7 @@ def fit_ridge_multioutput(
     alpha: float = 1.0,
     random_state: int = 42,
 ):
+    """Ajuste une régression Ridge multi-sortie."""
     model = Ridge(alpha=alpha, random_state=random_state)
     model.fit(X_train, y_train_flat)
     return model
@@ -53,6 +59,7 @@ def fit_elasticnet_multioutput(
     random_state: int = 42,
     max_iter: int = 3000,
 ):
+    """Ajuste une régression ElasticNet enveloppée en multi-sortie."""
     base = ElasticNet(
         alpha=alpha,
         l1_ratio=l1_ratio,
@@ -73,6 +80,7 @@ def fit_random_forest_multioutput(
     n_jobs: int = -1,
     random_state: int = 42,
 ):
+    """Ajuste une forêt aléatoire multi-sortie."""
     model = RandomForestRegressor(
         n_estimators=n_estimators,
         max_depth=max_depth,
@@ -93,6 +101,7 @@ def fit_extra_trees_multioutput(
     n_jobs: int = -1,
     random_state: int = 42,
 ):
+    """Ajuste un modèle Extra Trees multi-sortie."""
     model = ExtraTreesRegressor(
         n_estimators=n_estimators,
         max_depth=max_depth,
@@ -116,6 +125,7 @@ def fit_hist_gb_multioutput(
     validation_fraction: float = 0.2,
     random_state: int = 42,
 ):
+    """Ajuste un gradient boosting histogramme enveloppé en multi-sortie."""
     base = HistGradientBoostingRegressor(
         learning_rate=learning_rate,
         max_iter=max_iter,
@@ -132,6 +142,7 @@ def fit_hist_gb_multioutput(
 
 
 def predict_tensor(model, X: np.ndarray, horizon_count: int = 4, roi_size: int = 51) -> np.ndarray:
+    """Prédit puis reconvertit les sorties aplaties en tenseur de cartes."""
     y_pred_flat = model.predict(X)
     return unflatten_target(y_pred_flat, horizon_count=horizon_count, roi_size=roi_size)
 
@@ -142,8 +153,9 @@ def patchwise_target_means(
     n_cols: int = 2,
 ) -> tuple[np.ndarray, list[str]]:
     """
-    Convert a residual map target (n, 4, 51, 51) into patch-wise mean targets.
-    Example with 2x2 patches -> 4 patches per horizon -> 16 outputs total.
+    Convertit une cible résiduelle (n, 4, 51, 51) en moyennes par patch.
+
+    Avec une grille 2 par 2, on obtient 4 patchs par horizon et 16 sorties au total.
     """
     y = np.asarray(y, dtype=np.float32)
     n, h_count, h, w = y.shape
@@ -172,7 +184,7 @@ def patchwise_predictions_to_map(
     clip_min: float = 0.0,
 ) -> np.ndarray:
     """
-    Expand patch-wise residual predictions back to full maps and add them to a baseline.
+    Étend les résidus prédits par patch en cartes complètes et les ajoute à un modèle de référence.
     """
     baseline = np.asarray(baseline, dtype=np.float32)
     patch_pred = np.asarray(patch_pred, dtype=np.float32)

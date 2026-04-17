@@ -1,4 +1,4 @@
-"""Model interpretation helpers for tabular solar forecasting models."""
+"""Outils d'interprétation pour les modèles tabulaires de prévision solaire."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ MetricFn = Callable[[np.ndarray, np.ndarray], float]
 
 
 def rmse_flat(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """RMSE for 2D target arrays."""
+    """Calcule la RMSE pour des cibles en deux dimensions."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
@@ -21,7 +21,7 @@ def rmse_flat(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 @dataclass(frozen=True)
 class PermutationImportanceResult:
-    """Container for permutation importance results."""
+    """Conteneur des résultats d'importance par permutation."""
 
     importance: pd.DataFrame
     baseline_score: float
@@ -38,10 +38,10 @@ def permutation_importance_multioutput(
     max_features: int | None = None,
 ) -> PermutationImportanceResult:
     """
-    Compute permutation importance for any model exposing predict(X).
+    Calcule l'importance par permutation pour tout modèle exposant predict(X).
 
-    Importance is measured as the increase in the supplied error metric after
-    shuffling one feature. Higher values mean the feature is more useful.
+    L'importance mesure l'augmentation de l'erreur après mélange d'une variable.
+    Plus la valeur est élevée, plus la variable est utile au modèle.
     """
     X = np.asarray(X)
     y = np.asarray(y)
@@ -86,9 +86,9 @@ def permutation_importance_multioutput(
 
 def model_feature_importances(model, feature_names: list[str]) -> pd.DataFrame:
     """
-    Extract native feature importances or coefficients when available.
+    Extrait les importances natives ou les coefficients lorsqu'ils existent.
 
-    MultiOutputRegressor estimators are averaged across outputs.
+    Les estimateurs de MultiOutputRegressor sont moyennés sur les sorties.
     """
     estimators = getattr(model, "estimators_", None)
     if estimators is None:
@@ -121,10 +121,10 @@ def compute_tree_shap_values(
     max_samples: int = 100,
 ):
     """
-    Compute SHAP values for one output of a tree model if shap is installed.
+    Calcule les valeurs SHAP pour une sortie d'un modèle d'arbres si shap est installé.
 
-    Returns a tuple (shap_values, X_sample, feature_names). The import is local
-    so the rest of the project works without the optional dependency.
+    Renvoie un tuple (shap_values, X_sample, feature_names). L'import est local
+    afin que le reste du projet fonctionne sans cette dépendance optionnelle.
     """
     try:
         import shap  # type: ignore
@@ -140,4 +140,3 @@ def compute_tree_shap_values(
     explainer = shap.Explainer(estimator, X_sample, feature_names=feature_names)
     shap_values = explainer(X_sample)
     return shap_values, X_sample, feature_names
-

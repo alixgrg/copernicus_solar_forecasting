@@ -1,4 +1,4 @@
-"""Metrics for Copernicus solar forecasting."""
+"""Métriques d'évaluation pour la prévision solaire Copernicus."""
 
 from __future__ import annotations
 
@@ -11,48 +11,48 @@ from config import FORECAST_HORIZONS_MINUTES
 
 
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Global RMSE on a full prediction tensor."""
+    """Calcule la RMSE globale sur un tenseur complet de prévisions."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
 
 def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Global MAE on a full prediction tensor."""
+    """Calcule la MAE globale sur un tenseur complet de prévisions."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     return float(np.mean(np.abs(y_true - y_pred)))
 
 
 def mean_bias_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Mean signed error. Positive values mean over-forecasting."""
+    """Calcule l'erreur signée moyenne. Une valeur positive indique une surestimation."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     return float(np.mean(y_pred - y_true))
 
 
 def median_absolute_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Median absolute error on a full prediction tensor."""
+    """Calcule l'erreur absolue médiane sur un tenseur complet de prévisions."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     return float(np.median(np.abs(y_true - y_pred)))
 
 
 def p90_absolute_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """90th percentile absolute error on a full prediction tensor."""
+    """Calcule le percentile 90 de l'erreur absolue sur un tenseur complet."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     return float(np.quantile(np.abs(y_true - y_pred), 0.90))
 
 
 def normalized_rmse(y_true: np.ndarray, y_pred: np.ndarray, eps: float = 1e-8) -> float:
-    """RMSE divided by the mean observed GHI."""
+    """Calcule la RMSE divisée par le GHI moyen observé."""
     y_true = np.asarray(y_true, dtype=np.float64)
     return float(rmse(y_true, y_pred) / (np.mean(y_true) + eps))
 
 
 def spatial_mean_correlation(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Correlation between observed and predicted spatial means."""
+    """Calcule la corrélation entre moyennes spatiales observées et prédites."""
     y_true_mean = np.asarray(y_true, dtype=np.float64).mean(axis=(2, 3)).ravel()
     y_pred_mean = np.asarray(y_pred, dtype=np.float64).mean(axis=(2, 3)).ravel()
     if np.std(y_true_mean) < 1e-12 or np.std(y_pred_mean) < 1e-12:
@@ -61,7 +61,7 @@ def spatial_mean_correlation(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def evaluate_forecasts(y_true: np.ndarray, y_pred: np.ndarray) -> pd.DataFrame:
-    """Return global metrics on a forecast tensor."""
+    """Renvoie les métriques globales d'un tenseur de prévisions."""
     return pd.DataFrame(
         {
             "metric": ["RMSE", "MAE", "MBE", "MedAE", "P90AE", "nRMSE", "R2", "MAPE", "corr_spatial_mean"],
@@ -85,7 +85,7 @@ def evaluate_by_horizon(
     y_pred: np.ndarray,
     horizons: list[int] | tuple[int, ...] = FORECAST_HORIZONS_MINUTES,
 ) -> pd.DataFrame:
-    """Return RMSE and MAE for each forecast horizon."""
+    """Renvoie la RMSE et la MAE pour chaque horizon de prévision."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
 
@@ -107,11 +107,10 @@ def evaluate_spatial_means(
     horizons: list[int] | tuple[int, ...] = FORECAST_HORIZONS_MINUTES,
 ) -> pd.DataFrame:
     """
-    Evaluate forecasts on spatial means only.
+    Évalue les prévisions uniquement sur les moyennes spatiales.
 
-    Useful to distinguish:
-    - error on the mean irradiance level
-    - error on the fine spatial structure
+    Cette métrique distingue l'erreur sur le niveau moyen d'irradiance de
+    l'erreur sur la structure spatiale fine.
     """
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
@@ -137,7 +136,7 @@ def evaluate_model_bundle(
     model_name: str,
     horizons: list[int] | tuple[int, ...] = FORECAST_HORIZONS_MINUTES,
 ) -> dict[str, pd.DataFrame]:
-    """Convenience wrapper returning all evaluation tables for one model."""
+    """Renvoie toutes les tables d'évaluation pour un modèle."""
     return {
         "global": evaluate_forecasts(y_true, y_pred).assign(model=model_name),
         "by_horizon": evaluate_by_horizon(y_true, y_pred, horizons=horizons).assign(model=model_name),
@@ -147,9 +146,9 @@ def evaluate_model_bundle(
 
 def compare_global_scores(results: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFrame:
     """
-    Aggregate global scores from several model result bundles.
+    Agrège les scores globaux de plusieurs ensembles de résultats.
 
-    Expected format:
+    Format attendu:
         {
             "model_a": {"global": ..., "by_horizon": ..., ...},
             "model_b": {"global": ..., "by_horizon": ..., ...},
@@ -165,7 +164,7 @@ def compare_global_scores(results: dict[str, dict[str, pd.DataFrame]]) -> pd.Dat
     return pd.DataFrame(rows).sort_values("RMSE", ascending=True).reset_index(drop=True)
 
 def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Global R-squared score."""
+    """Calcule le coefficient de détermination global."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     ss_res = np.sum((y_true - y_pred) ** 2)
@@ -173,7 +172,7 @@ def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(1 - (ss_res / (ss_tot + 1e-8)))
 
 def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Global Mean Absolute Percentage Error (MAPE)."""
+    """Calcule l'erreur absolue moyenne en pourcentage globale."""
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     # On ajoute un petit epsilon pour éviter la division par zéro la nuit
@@ -190,7 +189,7 @@ def forecast_skill_score(mse_model: float, mse_persistence: float) -> float:
 
 
 def skill_score_from_rmse(model_rmse: float, persistence_rmse: float) -> float:
-    """Skill score using RMSE values and the MSE-based project helper."""
+    """Calcule le skill score à partir de RMSE via l'aide fondée sur la MSE."""
     return forecast_skill_score(model_rmse**2, persistence_rmse**2)
 
 def add_skill_scores(results_df: pd.DataFrame, persistence_rmse: float) -> pd.DataFrame:
@@ -206,9 +205,12 @@ def add_skill_scores(results_df: pd.DataFrame, persistence_rmse: float) -> pd.Da
 
 
 def spatial_mean_residual(y_true, baseline_pred):
+    """Calcule le résidu moyen spatial entre la vérité et un modèle de référence."""
     return (np.asarray(y_true) - np.asarray(baseline_pred)).mean(axis=(2, 3))
 
+
 def global_metrics_row(model_name, y_true, y_pred, reference_rmse=None):
+    """Construit une ligne de métriques globales pour un modèle."""
     row = {"model": model_name}
     for _, record in evaluate_forecasts(y_true, y_pred).iterrows():
         row[str(record["metric"])] = float(record["value"])
@@ -218,6 +220,7 @@ def global_metrics_row(model_name, y_true, y_pred, reference_rmse=None):
 
 
 def cluster_quality(X, labels):
+    """Calcule des indicateurs de qualité pour un partitionnement."""
     unique = np.unique(labels)
     if len(unique) < 2 or len(unique) >= len(labels):
         return pd.DataFrame()
@@ -234,6 +237,7 @@ def cluster_quality(X, labels):
 
 
 def metrics_by_cluster(y_true, y_pred, labels, model_name, cluster_name_map, reference_pred=None):
+    """Évalue un modèle séparément pour chaque cluster interprété."""
     rows = []
     for cluster in sorted(np.unique(labels)):
         mask = labels == cluster
@@ -257,12 +261,12 @@ def metrics_by_cluster(y_true, y_pred, labels, model_name, cluster_name_map, ref
 
 
 def skill_score_metric(model_metric: float, reference_metric: float, eps: float = 1e-8) -> float:
-    """Skill score directly on a metric such as RMSE or MAE."""
+    """Calcule un skill score directement sur une métrique comme la RMSE ou la MAE."""
     return 1.0 - (model_metric / (reference_metric + eps))
 
 
 def centered_spatial_fields(y: np.ndarray) -> np.ndarray:
-    """Remove spatial mean from each map, preserving only spatial structure."""
+    """Retire la moyenne spatiale de chaque carte pour conserver la structure locale."""
     y = np.asarray(y, dtype=np.float64)
     return y - y.mean(axis=(2, 3), keepdims=True)
 
@@ -273,10 +277,10 @@ def evaluate_spatial_structure(
     horizons: list[int] | tuple[int, ...] = FORECAST_HORIZONS_MINUTES,
 ) -> pd.DataFrame:
     """
-    Evaluate only the spatial structure after removing the mean irradiance level.
+    Évalue uniquement la structure spatiale après retrait du niveau moyen d'irradiance.
 
-    If a model improves RMSE_spatial_mean but not RMSE_structure,
-    it mostly corrects the average level, not the cloud pattern itself.
+    Si un modèle améliore RMSE_spatial_mean mais pas RMSE_structure, il corrige
+    surtout le niveau moyen et non la forme du motif nuageux.
     """
     y_true_c = centered_spatial_fields(y_true)
     y_pred_c = centered_spatial_fields(y_pred)
@@ -300,7 +304,7 @@ def evaluate_by_horizon_detailed(
     horizons: list[int] | tuple[int, ...] = FORECAST_HORIZONS_MINUTES,
 ) -> pd.DataFrame:
     """
-    More detailed horizon-wise diagnostics.
+    Produit des diagnostics détaillés par horizon.
     """
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
@@ -344,7 +348,7 @@ def build_model_diagnostics(
     reference_name: str = "persistence_csi",
 ) -> dict[str, pd.DataFrame]:
     """
-    Build all comparison tables from a dict of predictions.
+    Construit toutes les tables de comparaison à partir d'un dictionnaire de prédictions.
     """
     if reference_name not in predictions:
         raise KeyError(f"reference_name='{reference_name}' not found in predictions.")
@@ -388,6 +392,7 @@ def build_model_diagnostics(
 
 
 def cluster_balance_report(labels: np.ndarray) -> pd.DataFrame:
+    """Décrit les effectifs et proportions de chaque cluster."""
     labels = np.asarray(labels)
     counts = pd.Series(labels).value_counts().sort_index()
     shares = counts / counts.sum()

@@ -1,4 +1,4 @@
-"""Save and load model outputs across local and Colab runs."""
+"""Sauvegarde et recharge les sorties de modèles locales ou Colab."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "reports" / "model_outputs"
 
 
 def model_slug(model_name: str) -> str:
-    """Return a filesystem-friendly model identifier."""
+    """Renvoie un identifiant de modèle compatible avec le système de fichiers."""
     allowed = []
     for char in model_name.lower().strip():
         if char.isalnum():
@@ -44,11 +44,11 @@ def save_model_output(
     overwrite: bool = True,
 ) -> dict[str, Path]:
     """
-    Save one model prediction plus metadata and optional metrics.
+    Sauvegarde les prédictions d'un modèle avec leurs métadonnées.
 
-    Predictions are the canonical artifact. Metrics are saved as a convenience,
-    but final comparisons should recompute them from y_true to keep all models
-    aligned.
+    Les prédictions sont l'artefact de référence. Les métriques peuvent être
+    sauvegardées pour consultation, mais les comparaisons finales les recalculent
+    à partir de y_true afin de garder tous les modèles alignés.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ def save_prediction_bundle(
     extra_metadata: dict[str, Any] | None = None,
     overwrite: bool = True,
 ) -> pd.DataFrame:
-    """Save several model predictions and return a manifest table."""
+    """Sauvegarde plusieurs jeux de prédictions et renvoie une table manifeste."""
     rows = []
     for model_name, y_pred in predictions.items():
         paths = save_model_output(
@@ -143,7 +143,7 @@ def save_prediction_bundle(
 
 
 def list_saved_outputs(output_dir: str | Path = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
-    """List saved model artifacts in an output directory."""
+    """Liste les artefacts de modèles sauvegardés dans un dossier de sortie."""
     output_dir = Path(output_dir)
     rows = []
     for metadata_path in sorted(output_dir.glob("*_metadata.json")):
@@ -171,7 +171,7 @@ def load_saved_predictions(
     model_names: list[str] | None = None,
     strict_shape: tuple[int, ...] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Load saved prediction artifacts."""
+    """Recharge des artefacts de prédictions sauvegardés."""
     output_dir = Path(output_dir)
     listing = list_saved_outputs(output_dir)
     if listing.empty:
@@ -203,7 +203,7 @@ def diagnostics_from_saved_outputs(
     reference_name: str = "persistence_csi",
     include_predictions: dict[str, np.ndarray] | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """Load saved predictions and build comparison diagnostics."""
+    """Recharge les prédictions sauvegardées et construit les diagnostics comparatifs."""
     predictions = {}
     if include_predictions:
         predictions.update(include_predictions)

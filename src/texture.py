@@ -1,4 +1,4 @@
-"""Spatial texture features for cloud-regime characterization."""
+"""Variables de texture spatiale pour caractériser les régimes nuageux."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def quantize_image(image: np.ndarray, levels: int = 16) -> np.ndarray:
-    """Quantize one image to integer gray levels."""
+    """Quantifie une image en niveaux de gris entiers."""
     image = np.asarray(image, dtype=np.float32)
     finite = np.isfinite(image)
     if not finite.any():
@@ -25,7 +25,7 @@ def glcm_matrix(
     levels: int = 16,
     offsets: tuple[tuple[int, int], ...] = ((0, 1), (1, 0), (1, 1), (-1, 1)),
 ) -> np.ndarray:
-    """Build a normalized gray-level co-occurrence matrix."""
+    """Construit une matrice de cooccurrence des niveaux de gris normalisée."""
     quantized = quantize_image(image, levels=levels)
     matrix = np.zeros((levels, levels), dtype=np.float64)
     height, width = quantized.shape
@@ -47,7 +47,7 @@ def glcm_matrix(
 
 
 def glcm_properties(image: np.ndarray, levels: int = 16) -> dict[str, float]:
-    """Compute common GLCM texture descriptors."""
+    """Calcule des descripteurs de texture GLCM usuels."""
     p = glcm_matrix(image, levels=levels)
     indices = np.arange(levels, dtype=np.float64)
     i, j = np.meshgrid(indices, indices, indexing="ij")
@@ -74,6 +74,7 @@ def _gabor_kernel(
     sigma: float = 2.0,
     radius: int = 5,
 ) -> np.ndarray:
+    """Construit un noyau de Gabor pour une fréquence et une orientation données."""
     axis = np.arange(-radius, radius + 1, dtype=np.float64)
     x, y = np.meshgrid(axis, axis)
     x_theta = x * np.cos(theta) + y * np.sin(theta)
@@ -93,7 +94,7 @@ def gabor_properties(
     frequencies: tuple[float, ...] = (0.10, 0.20),
     thetas: tuple[float, ...] = (0.0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
 ) -> dict[str, float]:
-    """Compute compact Gabor filter response statistics."""
+    """Calcule des statistiques compactes de réponse aux filtres de Gabor."""
     from scipy import ndimage
 
     img = np.asarray(image, dtype=np.float32)
@@ -128,10 +129,10 @@ def build_texture_features(
     include_gabor: bool = True,
 ) -> pd.DataFrame:
     """
-    Build texture descriptors from one image per sample.
+    Construit des descripteurs de texture à partir d'une image par échantillon.
 
-    The default uses the last CSI frame, which is a good proxy for cloud cover
-    complexity before forecasting.
+    Par défaut, la dernière image CSI est utilisée car elle résume bien la
+    complexité de la couverture nuageuse avant la prévision.
     """
     if variable not in arrays:
         raise KeyError(f"Variable '{variable}' not found in arrays.")
@@ -149,4 +150,3 @@ def build_texture_features(
 
     prefix = f"{variable.lower()}_t{time_index}_"
     return pd.DataFrame(rows).add_prefix(prefix).astype(np.float32)
-

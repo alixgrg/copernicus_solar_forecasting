@@ -1,147 +1,96 @@
 # Copernicus Solar Forecasting
 
-## Project Overview
+Projet d'apprentissage automatique consacré à la prévision solaire à court terme à partir de séquences d'images satellitaires Copernicus.
 
-This project focuses on **short-term solar irradiance forecasting** using satellite image sequences from the Copernicus program.
+Le notebook de rendu est `notebooks/Copernicus_notebook_final_beta.ipynb`.
 
-The goal is to predict the **Global Horizontal Irradiance (GHI)** for the next **15 to 60 minutes** based on:
+## Objectif
 
-* past satellite observations,
-* clear-sky irradiance models,
-* solar position information.
+Le but est de prédire les quatre prochaines cartes de GHI, aux horizons 15, 30, 45 et 60 minutes, à partir des dernières observations satellitaires et de variables physiques associées.
 
-This is a **spatio-temporal regression problem** involving sequences of images.
+Le problème est traité comme une régression spatio-temporelle sur images. Les entrées couvrent une zone 81 par 81 pixels, tandis que la cible correspond à la région centrale 51 par 51 pixels.
 
----
+## Données
 
-## Objectives
+Les fichiers de données ne sont pas inclus dans le dépôt, car ils sont trop volumineux.
 
-* Predict future GHI images (up to +1 hour)
-* Compare multiple machine learning approaches:
+Les fichiers bruts attendus doivent être placés dans `data/raw/`:
 
-  * Baseline models (persistence, linear regression)
-  * Supervised models (Random Forest, SVM, etc.)
-  * Unsupervised learning (clustering)
-  * Deep learning (CNN / ConvLSTM - optional)
-* Evaluate performance using:
+- `X_train_copernicus.npz`
+- `X_test_copernicus.npz`
+- `y_train_zRvpCeO_nQsYtKN.csv`
+- `y_sub.csv`
 
-  * RMSE
-  * MAE
+Les profils prétraités sont générés dans `data/processed/` par les fonctions de `src/data_loading.py`. Ce dossier est ignoré par Git.
 
----
+## Méthode
 
-## Data Description
+Le notebook final suit la chaîne de traitement suivante:
 
-Each sample contains:
+- chargement et prétraitement des tableaux Copernicus
+- analyse exploratoire des variables et des cibles
+- construction de variables physiques, tabulaires, spatiales et de texture
+- baselines de persistance sur GHI et CSI
+- modèles tabulaires supervisés, dont Ridge, ElasticNet, Random Forest, Extra Trees et HistGradientBoosting
+- analyse par horizon, par structure spatiale et par régimes nuageux
+- interprétation par importance de variables et SHAP
+- comparaison avec des prédictions d'apprentissage profond sauvegardées lorsque disponibles
 
-### Inputs:
-
-* **GHI (81×81×4)** → past irradiance images
-* **GHIcls (81×81×8)** → clear-sky irradiance (past + future)
-* **SZA (81×81×8)** → solar zenith angle
-* **SAA (81×81×8)** → solar azimuth angle
-
-### Output:
-
-* **GHI (51×51×4)** → future irradiance (next 15, 30, 45, 60 min)
-
----
-
-## Data Access
-
-The dataset is not included in this repository due to its size.
-
-Download it here:
-**[INSERT GOOGLE DRIVE LINK]**
-
-Then place the files in:
-
-```
-data/raw/
-```
-
----
+Les modèles d'apprentissage profond sont optionnels. Le notebook peut recharger des prédictions sauvegardées dans `reports/model_outputs/final_beta/` sans relancer TensorFlow localement.
 
 ## Installation
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/YOUR-USERNAME/copernicus-solar-forecasting.git
-cd copernicus-solar-forecasting
-```
-
-### 2. Create the environment (Conda)
+Créer l'environnement conda:
 
 ```bash
 conda env create -f environment.yml
 conda activate copernicus-solar
 ```
 
-### 3. Launch Jupyter
+Lancer Jupyter:
 
 ```bash
 jupyter lab
 ```
 
----
+Ouvrir ensuite:
 
-## Project Structure
-
-```
-.
-├── data/
-│   ├── raw/            # raw data (not versioned)
-│   └── processed/      # cleaned data
-├── notebooks/          # experiments & EDA
-├── src/                # reusable code
-├── models/             # saved models (ignored)
-├── reports/            # figures & results
-├── environment.yml     # conda environment
-└── README.md
+```text
+notebooks/Copernicus_notebook_final_beta.ipynb
 ```
 
----
+## Structure du projet
 
-## Methodology
+```text
+config.py
+environment.yml
+README.md
+data/raw/
+data/processed/
+models/models_tabular.py
+notebooks/Copernicus_notebook_final_beta.ipynb
+reports/model_outputs/
+src/baselines.py
+src/data_loading.py
+src/deep_learning.py
+src/eda.py
+src/experiment_io.py
+src/features.py
+src/interpretation.py
+src/metrics.py
+src/motion.py
+src/preprocessing.py
+src/texture.py
+src/utils.py
+src/visualization.py
+```
 
-The project follows a structured machine learning pipeline:
+## Reproductibilité
 
-1. Data exploration and preprocessing
-2. Feature engineering
-3. Baseline modeling
-4. Advanced supervised models
-5. Unsupervised analysis (clustering)
-6. Model interpretation (SHAP, feature importance)
-7. Optional deep learning approaches
+Le notebook utilise `PROFILE = "full"` pour l'exécution finale. Les profils `dev` et `sample` restent disponibles pour des tests rapides.
 
----
+Les résultats volumineux, les caches Python, les données brutes et les données prétraitées sont ignorés par Git. Pour partager une exécution déjà calculée, fournir séparément les artefacts nécessaires de `reports/model_outputs/final_beta/`.
 
-## Evaluation Metrics
+## Auteur
 
-Models are evaluated using:
-
-* **RMSE (Root Mean Squared Error)**
-* **MAE (Mean Absolute Error)**
-
-Evaluation is performed:
-
-* globally
-* for each forecast horizon (15, 30, 45, 60 min)
-
----
-
-## Contributors
-
-* Alix GREGGIO
-
----
-
-## Notes
-
-* Large data files are not tracked by Git
-* Use the provided download link
-* Ensure correct folder structure before running notebooks
-
----
-
+Alix GREGGIO

@@ -1,2 +1,1 @@
-"""Utilities for the Copernicus solar forecasting project."""
-
+"""Outils du projet de prévision solaire Copernicus."""

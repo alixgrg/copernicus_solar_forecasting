@@ -1,4 +1,4 @@
-"""Exploratory analysis helpers for processed Copernicus arrays."""
+"""Outils d'analyse exploratoire pour les tableaux Copernicus prétraités."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from config import FORECAST_HORIZONS_MINUTES
 
 
 def descriptive_stats(arrays: dict[str, np.ndarray], y: np.ndarray | None = None) -> pd.DataFrame:
-    """Compute descriptive statistics for each variable."""
+    """Calcule des statistiques descriptives pour chaque variable."""
     rows = []
     for name, values in arrays.items():
         rows.append(_stats_row(name, values))
@@ -19,6 +19,7 @@ def descriptive_stats(arrays: dict[str, np.ndarray], y: np.ndarray | None = None
 
 
 def _stats_row(name: str, values: np.ndarray) -> dict[str, object]:
+    """Construit une ligne de statistiques descriptives pour un tableau."""
     values = np.asarray(values)
     return {
         "variable": name,
@@ -32,7 +33,7 @@ def _stats_row(name: str, values: np.ndarray) -> dict[str, object]:
 
 
 def target_horizon_stats(y: np.ndarray) -> pd.DataFrame:
-    """Compute target statistics for each forecast horizon."""
+    """Calcule les statistiques de la cible pour chaque horizon de prévision."""
     y = np.asarray(y)
     rows = []
     for horizon_index, horizon in enumerate(FORECAST_HORIZONS_MINUTES):
@@ -51,7 +52,7 @@ def target_horizon_stats(y: np.ndarray) -> pd.DataFrame:
 
 
 def temporal_ghi_summary(ghi: np.ndarray, label: str = "GHI") -> pd.DataFrame:
-    """Summarize GHI levels across temporal frames."""
+    """Résume les niveaux de GHI sur les pas temporels."""
     ghi = np.asarray(ghi)
     rows = []
     for time_index in range(ghi.shape[1]):
@@ -73,7 +74,7 @@ def sample_level_means(
     arrays: dict[str, np.ndarray],
     y: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """Aggregate each sample to one mean value per variable."""
+    """Agrège chaque échantillon en une moyenne par variable."""
     data = {}
     for name, values in arrays.items():
         values = np.asarray(values)

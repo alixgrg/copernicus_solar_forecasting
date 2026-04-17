@@ -1,4 +1,4 @@
-"""Generic utilities shared across the project."""
+"""Utilitaires génériques partagés dans le projet."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import numpy as np
 
 
 def ensure_exists(path: str | Path, message: str | None = None) -> Path:
-    """Return a Path if it exists, otherwise raise a clear FileNotFoundError."""
+    """Renvoie un Path s'il existe, sinon lève une erreur explicite."""
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(message or f"Path not found: {path}")
@@ -17,7 +17,7 @@ def ensure_exists(path: str | Path, message: str | None = None) -> Path:
 
 
 def ensure_directory(path: str | Path) -> Path:
-    """Create a directory if needed and return it as a Path."""
+    """Crée un dossier si nécessaire et le renvoie sous forme de Path."""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -28,7 +28,7 @@ def normalize_indices(
     n_available: int,
     limit: int | None = None,
 ) -> np.ndarray:
-    """Normalize index input into a 1D integer array."""
+    """Normalise une entrée d'indices en tableau entier à une dimension."""
     if indices is None:
         size = n_available if limit is None else min(limit, n_available)
         return np.arange(size, dtype=int)
@@ -50,7 +50,7 @@ def normalize_indices(
 
 
 def describe_numeric_array(name: str, array: np.ndarray) -> dict[str, object]:
-    """Return compact descriptive statistics for one numeric array."""
+    """Renvoie des statistiques descriptives compactes pour un tableau numérique."""
     values = np.asarray(array)
     return {
         "array": name,
@@ -63,4 +63,3 @@ def describe_numeric_array(name: str, array: np.ndarray) -> dict[str, object]:
         "max": float(np.nanmax(values)),
         "nan_count": int(np.isnan(values).sum()) if np.issubdtype(values.dtype, np.number) else 0,
     }
-

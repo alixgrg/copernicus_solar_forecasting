@@ -1,4 +1,4 @@
-"""Cloud-motion features and advective baselines."""
+"""Variables de mouvement nuageux et modèles de référence advectifs."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def has_opencv() -> bool:
-    """Return True when OpenCV is available."""
+    """Indique si OpenCV est disponible."""
     try:
         import cv2  # noqa: F401
     except ImportError:
@@ -16,6 +16,7 @@ def has_opencv() -> bool:
 
 
 def _normalize_frame(frame: np.ndarray) -> np.ndarray:
+    """Normalise une image entre 0 et 1 à partir de percentiles robustes."""
     frame = np.asarray(frame, dtype=np.float32)
     finite = np.isfinite(frame)
     if not finite.any():
@@ -30,10 +31,11 @@ def _normalize_frame(frame: np.ndarray) -> np.ndarray:
 
 def farneback_flow_pair(prev_frame: np.ndarray, next_frame: np.ndarray) -> np.ndarray:
     """
-    Dense optical flow with Farneback when OpenCV is installed.
+    Calcule un flot optique dense de Farneback lorsque OpenCV est installé.
 
-    Returns an array with shape (height, width, 2), where the last dimension is
-    (dx, dy). The notebook falls back to phase correlation when OpenCV is absent.
+    Renvoie un tableau de forme (hauteur, largeur, 2), où la dernière dimension
+    contient (dx, dy). Le notebook se rabat sur la corrélation de phase si OpenCV
+    est absent.
     """
     try:
         import cv2
@@ -59,10 +61,10 @@ def farneback_flow_pair(prev_frame: np.ndarray, next_frame: np.ndarray) -> np.nd
 
 def phase_correlation_shift(prev_frame: np.ndarray, next_frame: np.ndarray) -> tuple[float, float]:
     """
-    Estimate a global translation (dx, dy) by phase correlation.
+    Estime une translation globale (dx, dy) par corrélation de phase.
 
-    This is a lightweight fallback when OpenCV is not available. It captures a
-    dominant cloud displacement, not a dense deformation field.
+    Cette méthode légère sert de solution de repli quand OpenCV n'est pas disponible.
+    Elle capture un déplacement dominant des nuages plutôt qu'un champ dense.
     """
     prev = _normalize_frame(prev_frame)
     nxt = _normalize_frame(next_frame)
@@ -80,22 +82,23 @@ def phase_correlation_shift(prev_frame: np.ndarray, next_frame: np.ndarray) -> t
     if peak_y > height // 2:
         peak_y -= height
 
-    # Sign convention: displacement from prev to next.
+    # Convention de signe: déplacement de l'image précédente vers la suivante.
     return float(-peak_x), float(-peak_y)
 
 
 def cloud_centroid_shift(prev_frame: np.ndarray, next_frame: np.ndarray) -> tuple[float, float]:
     """
-    Estimate motion from the displacement of cloudiness barycenters.
+    Estime le mouvement à partir du déplacement des barycentres de nébulosité.
 
-    Cloudiness is approximated by max(0, 1 - CSI). This is less precise than
-    optical flow, but gives informative features when the dominant translation
-    is too small or too diffuse for phase correlation.
+    La nébulosité est approximée par max(0, 1 - CSI). Cette approche est moins
+    précise que le flot optique, mais reste informative lorsque la translation
+    dominante est trop faible ou trop diffuse pour la corrélation de phase.
     """
     prev_cloud = np.maximum(0.0, 1.0 - np.asarray(prev_frame, dtype=np.float32))
     next_cloud = np.maximum(0.0, 1.0 - np.asarray(next_frame, dtype=np.float32))
 
     def _centroid(weights: np.ndarray) -> tuple[float, float]:
+        """Calcule le barycentre pondéré d'une carte de nébulosité."""
         total = float(np.sum(weights))
         if total <= 1e-8:
             height, width = weights.shape
@@ -115,15 +118,15 @@ def estimate_motion_vectors(
     use_farneback: bool | None = None,
 ) -> pd.DataFrame:
     """
-    Estimate sample-level cloud-motion features from image sequences.
+    Estime des variables de mouvement nuageux à l'échelle de l'échantillon.
 
-    Parameters
+    Paramètres
     ----------
     sequence:
-        Array with shape (n_samples, n_times, height, width), typically CSI or GHI.
+        Tableau de forme (n_samples, n_times, height, width), typiquement CSI ou GHI.
     use_farneback:
-        If True, require OpenCV Farneback. If False, use phase correlation.
-        If None, Farneback is used only when OpenCV is available.
+        Si True, impose Farneback via OpenCV. Si False, utilise la corrélation de
+        phase. Si None, Farneback est utilisé seulement quand OpenCV est disponible.
     """
     sequence = np.asarray(sequence, dtype=np.float32)
     if sequence.ndim != 4 or sequence.shape[1] < 2:
@@ -195,10 +198,10 @@ def estimate_motion_vectors(
 
 def shift_image_nearest(image: np.ndarray, dx: float, dy: float) -> np.ndarray:
     """
-    Shift an image using nearest-neighbor integer displacement.
+    Décale une image avec un déplacement entier au plus proche voisin.
 
-    Empty borders are filled with the nearest available edge values. This keeps
-    the baseline simple, deterministic and dependency-light.
+    Les bordures vides sont remplies par les valeurs de bord les plus proches.
+    Cela garde le modèle de référence simple, déterministe et léger en dépendances.
     """
     image = np.asarray(image, dtype=np.float32)
     shift_x = int(np.rint(dx))
@@ -224,11 +227,11 @@ def advective_csi_baseline(
     eps: float = 1e-6,
 ) -> np.ndarray:
     """
-    Advective persistence baseline on clear-sky index.
+    Calcule un modèle de référence de persistance advective sur l'indice de ciel clair.
 
-    The last observed CSI map is shifted according to the estimated cloud-motion
-    vector, then multiplied by future clear-sky GHI. Horizon h uses h times the
-    last displacement estimate.
+    La dernière carte CSI observée est décalée selon le vecteur de mouvement
+    nuageux estimé, puis multipliée par le GHI de ciel clair futur. L'horizon h
+    utilise h fois le dernier déplacement estimé.
     """
     ghi = np.asarray(arrays_raw["GHI"], dtype=np.float32)
     cls = np.asarray(arrays_raw["CLS"], dtype=np.float32)

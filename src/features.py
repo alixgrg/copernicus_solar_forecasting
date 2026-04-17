@@ -1,4 +1,4 @@
-"""Feature construction for Copernicus solar forecasting."""
+"""Construction des variables pour la prévision solaire Copernicus."""
 
 from __future__ import annotations
 
@@ -13,19 +13,19 @@ def build_physical_inputs(
     encode_angles: bool = True,
 ) -> dict[str, np.ndarray]:
     """
-    Build physically-informed representations from processed arrays.
+    Construit des représentations inspirées de la physique à partir des tableaux prétraités.
 
-    Expected shapes:
+    Formes attendues:
         GHI: (n, 4, H, W)
         CLS: (n, 8, H, W)
         SZA: (n, 8, H, W)
         SAA: (n, 8, H, W)
 
-    Returns a dictionary containing:
-        - CSI: clear-sky index on past frames
+    Renvoie un dictionnaire contenant:
+        - CSI: indice de ciel clair sur les images passées
         - CLS
-        - SZA / SAA or their sin/cos encodings
-        - optionally raw GHI
+        - SZA et SAA ou leurs encodages sinus et cosinus
+        - GHI brut si demandé
     """
     out: dict[str, np.ndarray] = {}
 
@@ -44,9 +44,7 @@ def build_physical_inputs(
         out["GHI"] = ghi
 
     if encode_angles:
-        # Heuristic:
-        # - if values look like degrees, convert to radians
-        # - otherwise assume already in radians
+        # Les valeurs qui ressemblent à des degrés sont converties en radians.
         sza_rad = np.deg2rad(sza) if np.nanmax(np.abs(sza)) > 2 * np.pi + 1 else sza
         saa_rad = np.deg2rad(saa) if np.nanmax(np.abs(saa)) > 2 * np.pi + 1 else saa
 
@@ -71,13 +69,13 @@ def build_spatial_feature_tensor(
     include_raw_ghi: bool = False,
 ) -> tuple[np.ndarray, list[str]]:
     """
-    Build a channel-first tensor for CNN/spatial models.
+    Construit un tenseur avec les canaux en premier pour les modèles spatiaux.
 
-    Input arrays are assumed to be time-first:
+    Les tableaux d'entrée sont supposés avoir le temps en première dimension:
         (n_samples, time, height, width)
 
-    Output:
-        feature tensor of shape (n_samples, channels, height, width)
+    Sortie:
+        tenseur de variables de forme (n_samples, channels, height, width)
     """
     feature_blocks: list[np.ndarray] = []
     feature_names: list[str] = []
@@ -129,15 +127,16 @@ def build_tabular_features(
     add_quadrants: bool = True,
 ) -> pd.DataFrame:
     """
-    Build tabular features for classical ML / clustering / XAI.
+    Construit des variables tabulaires pour le machine learning classique.
 
-    Arrays are expected to be time-first:
+    Les tableaux sont attendus avec le temps en première dimension:
         (n_samples, time, H, W)
     """
     features: dict[str, np.ndarray] = {}
 
     def _add_summary_block(prefix: str, values: np.ndarray) -> None:
-        # Per-time-step mean and std
+        """Ajoute les statistiques agrégées d'une variable au dictionnaire de sortie."""
+        # Statistiques par pas temporel.
         mean_by_t = values.mean(axis=(2, 3))
         std_by_t = values.std(axis=(2, 3))
         min_by_t = values.min(axis=(2, 3))
@@ -149,11 +148,11 @@ def build_tabular_features(
             features[f"{prefix}_min_t{t}"] = min_by_t[:, t]
             features[f"{prefix}_max_t{t}"] = max_by_t[:, t]
 
-        # Global summaries
+        # Résumés globaux.
         features[f"{prefix}_mean_global"] = values.mean(axis=(1, 2, 3))
         features[f"{prefix}_std_global"] = values.std(axis=(1, 2, 3))
 
-        # Temporal trend on spatial mean
+        # Tendance temporelle de la moyenne spatiale.
         if values.shape[1] >= 2:
             features[f"{prefix}_trend_last_minus_first"] = mean_by_t[:, -1] - mean_by_t[:, 0]
 
@@ -191,7 +190,7 @@ def build_tabular_features(
 
 
 def feature_summary(feature_tensor: np.ndarray, feature_names: list[str]) -> dict[str, object]:
-    """Compact summary of a feature tensor."""
+    """Résume brièvement un tenseur de variables."""
     return {
         "shape": feature_tensor.shape,
         "n_features": int(feature_tensor.shape[1]),
@@ -201,31 +200,29 @@ def feature_summary(feature_tensor: np.ndarray, feature_names: list[str]) -> dic
 
 def build_advanced_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
     """
-    Crée des features agrégées pour booster les modèles tabulaires.
+    Crée des variables agrégées pour renforcer les modèles tabulaires.
     """
     features = {}
-    ghi = arrays["GHI"]  # (n, 4, 51, 51)
-    cls = arrays["CLS"]  # (n, 8, 51, 51)
+    ghi = arrays["GHI"]
+    cls = arrays["CLS"]
     
-    # 1. Statistiques Globales par frame (Moyenne/Std de l'image)
+    # Statistiques globales par image.
     for t in range(4):
         features[f"ghi_mean_t-{45-t*15}"] = ghi[:, t].mean(axis=(1, 2))
         features[f"ghi_std_t-{45-t*15}"] = ghi[:, t].std(axis=(1, 2))
 
-    # 2. Dynamique (Différence temporelle) : Les nuages bougent-ils ?
-    # Différence entre la frame actuelle (t) et la précédente (t-1)
+    # Dynamique temporelle entre les images successives.
     ghi_diff = ghi[:, 1:] - ghi[:, :-1]
     for t in range(3):
         features[f"ghi_diff_mean_t{t}"] = ghi_diff[:, t].mean(axis=(1, 2))
 
-    # 3. Clear Sky Index (CSI) moyen 
-    # Le CSI est plus stable que le GHI pour un modèle tabulaire
+    # CSI moyen, plus stable que le GHI pour un modèle tabulaire.
     cls_past = cls[:, :4]
     csi = ghi / (cls_past + 1e-6)
     features["csi_last_frame_mean"] = csi[:, -1].mean(axis=(1, 2))
     
-    # 4. Position du soleil (SZA moyen sur la zone)
-    sza_future = arrays["SZA"][:, 4:] # Les 4 horizons futurs
+    # Position future du soleil sur les quatre horizons.
+    sza_future = arrays["SZA"][:, 4:]
     for t in range(4):
         features[f"sza_future_t+{15+t*15}"] = sza_future[:, t].mean(axis=(1, 2))
 
@@ -234,11 +231,11 @@ def build_advanced_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
 
 def build_exogenous_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
     """
-    Build optional exogenous features such as wind components when available.
+    Construit des variables exogènes optionnelles, comme le vent si disponible.
 
-    The public Copernicus files used in this project expose only GHI, CLS, SZA
-    and SAA. This helper keeps the notebook ready for richer variants of the
-    data without failing when U/V wind fields are absent.
+    Les fichiers Copernicus publics utilisés ici exposent seulement GHI, CLS, SZA
+    et SAA. Cette fonction prépare le notebook à des variantes de données plus
+    riches sans échouer lorsque les champs de vent U et V sont absents.
     """
     wind_aliases = {
         "U": ("U", "u", "WIND_U", "wind_u", "U10", "u10"),
@@ -292,6 +289,7 @@ def build_exogenous_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
 
 
 def _quadrant_slices(h: int, w: int, n_rows: int = 2, n_cols: int = 2):
+    """Construit les découpes spatiales correspondant à une grille de quadrants."""
     h_edges = np.linspace(0, h, n_rows + 1, dtype=int)
     w_edges = np.linspace(0, w, n_cols + 1, dtype=int)
     return [
@@ -303,8 +301,10 @@ def _quadrant_slices(h: int, w: int, n_rows: int = 2, n_cols: int = 2):
 
 def _weighted_center_of_mass(batch_maps: np.ndarray, eps: float = 1e-6) -> tuple[np.ndarray, np.ndarray]:
     """
-    batch_maps shape: (n, h, w)
-    returns normalized (cy, cx) in [0, 1]
+    Calcule les centres de masse normalisés d'un lot de cartes.
+
+    batch_maps a pour forme (n, h, w). La sortie contient cy et cx normalisés
+    dans l'intervalle [0, 1].
     """
     n, h, w = batch_maps.shape
     yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
@@ -319,7 +319,7 @@ def _weighted_center_of_mass(batch_maps: np.ndarray, eps: float = 1e-6) -> tuple
 
 def _gradient_magnitude(batch_maps: np.ndarray) -> np.ndarray:
     """
-    batch_maps shape: (n, h, w)
+    Calcule la magnitude du gradient pour un lot de cartes de forme (n, h, w).
     """
     gy = np.diff(batch_maps, axis=1, append=batch_maps[:, -1:, :])
     gx = np.diff(batch_maps, axis=2, append=batch_maps[:, :, -1:])
@@ -327,6 +327,7 @@ def _gradient_magnitude(batch_maps: np.ndarray) -> np.ndarray:
 
 
 def _safe_corr(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> float:
+    """Calcule une corrélation robuste avec une petite stabilisation numérique."""
     a = a.ravel().astype(np.float64)
     b = b.ravel().astype(np.float64)
     a = a - a.mean()
@@ -337,8 +338,8 @@ def _safe_corr(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> float:
 
 def _best_shift_single(frame_prev: np.ndarray, frame_curr: np.ndarray, max_shift: int = 4):
     """
-    Estimate a pseudo motion vector (dy, dx) by maximizing correlation
-    over small integer shifts.
+    Estime un pseudo vecteur de mouvement (dy, dx) en maximisant la corrélation
+    sur de petits décalages entiers.
     """
     h, w = frame_prev.shape
     best_score = -np.inf
@@ -377,16 +378,16 @@ def build_spatial_dynamics_features(
     downsample: int = 2,
 ) -> pd.DataFrame:
     """
-    Features explicitly aimed at cloud dynamics and local spatial structure.
+    Construit des variables centrées sur la dynamique nuageuse et la structure locale.
     """
-    ghi = np.asarray(arrays["GHI"], dtype=np.float32)          # (n, 4, h, w)
-    cls = np.asarray(arrays["CLS"], dtype=np.float32)[:, :4]  # past only
+    ghi = np.asarray(arrays["GHI"], dtype=np.float32)
+    cls = np.asarray(arrays["CLS"], dtype=np.float32)[:, :4]
     csi = ghi / np.maximum(cls, eps)
 
     n, t, h, w = ghi.shape
     features: dict[str, np.ndarray] = {}
 
-    # --- 1. Quadrant-by-quadrant temporal differences (t-15 -> t) ---
+    # Différences temporelles par quadrant entre le dernier pas et le précédent.
     quad_slices = _quadrant_slices(h, w, n_rows=2, n_cols=2)
     ghi_last = ghi[:, -1]
     ghi_prev = ghi[:, -2]
@@ -400,13 +401,13 @@ def build_spatial_dynamics_features(
         features[f"quad{q_idx}_ghi_diff_last_minus_prev"] = ghi_diff_q
         features[f"quad{q_idx}_csi_diff_last_minus_prev"] = csi_diff_q
 
-    # --- 2. Gradient features on the latest CSI map ---
+    # Variables de gradient sur la dernière carte CSI.
     grad_last = _gradient_magnitude(csi_last)
     features["grad_csi_last_mean"] = grad_last.mean(axis=(1, 2))
     features["grad_csi_last_std"] = grad_last.std(axis=(1, 2))
     features["grad_csi_last_p90"] = np.quantile(grad_last.reshape(n, -1), 0.90, axis=1)
 
-    # --- 3. Centers of mass of dark / bright zones ---
+    # Centres de masse des zones sombres et lumineuses.
     dark_mass = np.maximum(1.0 - csi_last, 0.0)
     bright_mass = np.maximum(csi_last, 0.0)
 
@@ -418,7 +419,7 @@ def build_spatial_dynamics_features(
     features["bright_com_y_last"] = bright_cy
     features["bright_com_x_last"] = bright_cx
 
-    # --- 4. Pseudo motion between t-15 and t on dark cloud anomaly maps ---
+    # Pseudo mouvement entre les deux dernières cartes d'anomalie nuageuse.
     dark_prev = np.maximum(1.0 - csi_prev, 0.0)[:, ::downsample, ::downsample]
     dark_last_ds = np.maximum(1.0 - csi_last, 0.0)[:, ::downsample, ::downsample]
 
@@ -438,30 +439,30 @@ def build_spatial_dynamics_features(
 
 def build_advanced_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
     """
-    Crée des features agrégées + spatiales/dynamiques pour booster les modèles tabulaires.
+    Crée des variables agrégées, spatiales et dynamiques pour les modèles tabulaires.
     """
     features = {}
-    ghi = arrays["GHI"]  # (n, 4, 51, 51)
-    cls = arrays["CLS"]  # (n, 8, 51, 51)
+    ghi = arrays["GHI"]
+    cls = arrays["CLS"]
 
-    # 1. Statistiques Globales par frame
+    # Statistiques globales par image.
     for t in range(4):
         features[f"ghi_mean_t-{45-t*15}"] = ghi[:, t].mean(axis=(1, 2))
         features[f"ghi_std_t-{45-t*15}"] = ghi[:, t].std(axis=(1, 2))
 
-    # 2. Dynamique globale
+    # Dynamique globale.
     ghi_diff = ghi[:, 1:] - ghi[:, :-1]
     for t in range(3):
         features[f"ghi_diff_mean_t{t}"] = ghi_diff[:, t].mean(axis=(1, 2))
         features[f"ghi_diff_std_t{t}"] = ghi_diff[:, t].std(axis=(1, 2))
 
-    # 3. CSI moyen
+    # CSI moyen.
     cls_past = cls[:, :4]
     csi = ghi / (cls_past + 1e-6)
     features["csi_last_frame_mean"] = csi[:, -1].mean(axis=(1, 2))
     features["csi_last_frame_std"] = csi[:, -1].std(axis=(1, 2))
 
-    # 4. Position du soleil future
+    # Position future du soleil.
     sza_future = arrays["SZA"][:, 4:]
     for t in range(4):
         features[f"sza_future_t+{15+t*15}"] = sza_future[:, t].mean(axis=(1, 2))

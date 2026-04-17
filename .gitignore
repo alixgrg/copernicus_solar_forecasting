@@ -1,15 +1,38 @@
-# Conda
+# Environnements locaux
 .env
-.venv
+.venv/
+venv/
+env/
 *.env
 
 # Jupyter
 .ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
 
-# Données
+# Données volumineuses
 data/raw/
 data/processed/
+
+# Sorties générées
+reports/model_outputs/
+reports/figures/
+*.npz
+*.npy
+
+# Artefacts de modèles entraînés
+*.joblib
+*.pkl
+*.pickle
+*.h5
+*.keras
 
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+
+# Système et éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

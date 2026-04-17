@@ -1,4 +1,4 @@
-"""Optional deep-learning helpers for Copernicus solar forecasting."""
+"""Outils optionnels d'apprentissage profond pour la prévision solaire Copernicus."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import numpy as np
 
 
 def has_tensorflow() -> bool:
-    """Return True when TensorFlow/Keras can be imported."""
+    """Indique si TensorFlow et Keras peuvent être importés."""
     try:
         import tensorflow  # noqa: F401
     except ImportError:
@@ -16,7 +16,7 @@ def has_tensorflow() -> bool:
 
 def channels_first_to_last(feature_tensor: np.ndarray) -> np.ndarray:
     """
-    Convert a spatial tensor from (n, channels, height, width) to NHWC.
+    Convertit un tenseur spatial du format (n, canaux, hauteur, largeur) vers NHWC.
     """
     feature_tensor = np.asarray(feature_tensor, dtype=np.float32)
     if feature_tensor.ndim != 4:
@@ -26,7 +26,7 @@ def channels_first_to_last(feature_tensor: np.ndarray) -> np.ndarray:
 
 def target_to_channels_last(y: np.ndarray) -> np.ndarray:
     """
-    Convert target tensors from (n, horizon, height, width) to NHWC.
+    Convertit les tenseurs cibles du format (n, horizon, hauteur, largeur) vers NHWC.
     """
     y = np.asarray(y, dtype=np.float32)
     if y.ndim != 4:
@@ -36,7 +36,7 @@ def target_to_channels_last(y: np.ndarray) -> np.ndarray:
 
 def target_from_channels_last(y: np.ndarray) -> np.ndarray:
     """
-    Convert target tensors from NHWC back to (n, horizon, height, width).
+    Reconvertit les tenseurs cibles NHWC vers (n, horizon, hauteur, largeur).
     """
     y = np.asarray(y, dtype=np.float32)
     if y.ndim != 4:
@@ -50,10 +50,10 @@ def prepare_cnn_training_data(
     baseline: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Prepare X/y tensors for a small CNN.
+    Prépare les tenseurs X et y pour un petit CNN.
 
-    If a baseline is supplied, the network learns the residual field
-    y - baseline. This is usually easier than learning absolute GHI directly.
+    Si une baseline est fournie, le réseau apprend le champ résiduel y - baseline.
+    Cette formulation est souvent plus stable que l'apprentissage direct du GHI.
     """
     X_nhwc = channels_first_to_last(feature_tensor)
     target = np.asarray(y, dtype=np.float32)
@@ -70,15 +70,15 @@ def prepare_convlstm_training_data(
     eps: float = 1e-6,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """
-    Prepare a sequence tensor for ConvLSTM models.
+    Prépare un tenseur séquentiel pour les modèles ConvLSTM.
 
-    Each past step receives channels:
-    - CSI at that past time
-    - GHI at that past time
-    - CLS at that past time
-    - SZA/SAA at that past time when available
+    Chaque pas passé reçoit les canaux suivants:
+    - CSI au pas temporel correspondant
+    - GHI au pas temporel correspondant
+    - CLS au pas temporel correspondant
+    - SZA et SAA au pas temporel correspondant si disponibles
 
-    Output shape:
+    Formes de sortie:
         X: (n, 4, height, width, channels)
         y: (n, height, width, horizons)
     """
@@ -116,9 +116,9 @@ def build_small_residual_cnn(
     learning_rate: float = 1e-3,
 ):
     """
-    Build a compact fully-convolutional residual CNN with TensorFlow/Keras.
+    Construit un CNN résiduel compact et entièrement convolutionnel avec TensorFlow.
 
-    The model maps 51x51 feature maps to 51x51 residual maps for each horizon.
+    Le modèle transforme les cartes de variables en cartes de résidus pour chaque horizon.
     """
     try:
         import tensorflow as tf
@@ -150,10 +150,10 @@ def build_convlstm_residual_model(
     learning_rate: float = 1e-3,
 ):
     """
-    Build a compact ConvLSTM model for spatio-temporal residual forecasting.
+    Construit un modèle ConvLSTM compact pour prévoir les résidus spatio-temporels.
 
-    The input shape is (time, height, width, channels). The model predicts
-    residual GHI maps with shape (height, width, n_horizons).
+    L'entrée suit le format (temps, hauteur, largeur, canaux). Le modèle prédit des
+    cartes de résidus GHI au format (hauteur, largeur, n_horizons).
     """
     try:
         import tensorflow as tf
@@ -202,10 +202,10 @@ def fit_mlp_residual_mean(
     max_iter: int = 300,
 ):
     """
-    Lightweight neural-network fallback based on scikit-learn MLPRegressor.
+    Fournit une alternative légère de réseau de neurones avec MLPRegressor.
 
-    This is not a CNN, but it lets the notebook run a neural baseline when
-    TensorFlow/PyTorch are unavailable.
+    Ce modèle n'est pas un CNN, mais il permet au notebook d'exécuter une baseline
+    neuronale lorsque TensorFlow ou PyTorch ne sont pas disponibles.
     """
     from sklearn.neural_network import MLPRegressor
     from sklearn.pipeline import make_pipeline
@@ -234,7 +234,7 @@ def add_residual_mean_to_baseline(
     clip_min: float = 0.0,
 ) -> np.ndarray:
     """
-    Turn horizon-level residual predictions into full image forecasts.
+    Convertit des résidus moyens par horizon en prévisions complètes d'images.
     """
     baseline = np.asarray(baseline, dtype=np.float32)
     residual_mean_pred = np.asarray(residual_mean_pred, dtype=np.float32)

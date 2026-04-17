@@ -1,4 +1,4 @@
-"""Preprocessing helpers: quality checks, splits, and normalization."""
+"""Outils de prétraitement: contrôles qualité, découpages et normalisation."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from config import INPUT_VARIABLES, NORMALIZATION_EPS, VALIDATION_FRACTION
 
 @dataclass(frozen=True)
 class StandardizationStats:
-    """Mean and standard deviation used to standardize arrays."""
+    """Moyenne et écart type utilisés pour standardiser les tableaux."""
 
     mean: float
     std: float
@@ -23,7 +23,7 @@ def quality_report(
     arrays: dict[str, np.ndarray],
     y: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """Compute basic quality checks for X variables and optionally y."""
+    """Calcule des contrôles qualité de base pour X et éventuellement y."""
     rows = []
     for name, values in arrays.items():
         rows.append(_array_quality_row(name, values))
@@ -33,6 +33,7 @@ def quality_report(
 
 
 def _array_quality_row(name: str, values: np.ndarray) -> dict[str, object]:
+    """Construit une ligne de contrôle qualité pour un tableau."""
     values = np.asarray(values)
     finite_mask = np.isfinite(values) if np.issubdtype(values.dtype, np.number) else np.zeros(values.shape, dtype=bool)
     finite_values = values[finite_mask] if finite_mask.any() else np.array([])
@@ -51,7 +52,7 @@ def temporal_train_validation_split(
     n_samples: int,
     validation_fraction: float = VALIDATION_FRACTION,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Create a chronological train/validation split."""
+    """Crée un découpage chronologique entraînement validation."""
     if not 0 < validation_fraction < 1:
         raise ValueError("validation_fraction must be in (0, 1).")
     if n_samples < 2:
@@ -69,7 +70,7 @@ def fit_standardizer(
     variables: Iterable[str] = INPUT_VARIABLES,
     eps: float = NORMALIZATION_EPS,
 ) -> dict[str, StandardizationStats]:
-    """Fit one global mean/std pair per variable."""
+    """Ajuste une paire moyenne écart type globale pour chaque variable."""
     stats = {}
     for variable in tuple(variables):
         values = np.asarray(arrays[variable], dtype="float64")
@@ -83,7 +84,7 @@ def transform_with_standardizer(
     arrays: dict[str, np.ndarray],
     stats: dict[str, StandardizationStats],
 ) -> dict[str, np.ndarray]:
-    """Apply previously fitted standardization statistics."""
+    """Applique des statistiques de standardisation déjà ajustées."""
     transformed = {}
     for variable, values in arrays.items():
         if variable not in stats:
@@ -95,11 +96,10 @@ def transform_with_standardizer(
 
 
 def standardizer_to_frame(stats: dict[str, StandardizationStats]) -> pd.DataFrame:
-    """Convert standardization stats to a display-friendly DataFrame."""
+    """Convertit les statistiques de standardisation en DataFrame lisible."""
     return pd.DataFrame(
         [
             {"variable": variable, "mean": value.mean, "std": value.std}
             for variable, value in stats.items()
         ]
     )
-
