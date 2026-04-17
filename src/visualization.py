@@ -117,3 +117,28 @@ def describe_sample(sample: dict[str, np.ndarray]) -> pd.DataFrame:
 
 def horizon_titles(horizons: Iterable[int] = FORECAST_HORIZONS_MINUTES) -> list[str]:
     return [f"t+{h} min" for h in horizons]
+
+
+
+def plot_error_analysis(y_true, y_pred, title="Analyse des Erreurs"):
+    # On aplatit pour avoir tous les pixels
+    y_true_flat = y_true.flatten()
+    y_pred_flat = y_pred.flatten()
+    errors = y_pred_flat - y_true_flat
+
+    fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+    
+    # 1. Scatter plot : Valeur réelle vs Prédite
+    ax[0].scatter(y_true_flat[::100], y_pred_flat[::100], alpha=0.1, s=1)
+    ax[0].plot([0, 1000], [0, 1000], 'r--') # Ligne de perfection
+    ax[0].set_xlabel("GHI Réel")
+    ax[0].set_ylabel("GHI Prédit")
+    ax[0].set_title("Biais du modèle")
+
+    # 2. Distribution de l'erreur
+    ax[1].hist(errors, bins=50, color='skyblue', edgecolor='black')
+    ax[1].axvline(0, color='red', linestyle='--')
+    ax[1].set_title("Distribution de l'erreur (Ecart)")
+    
+    plt.suptitle(title)
+    plt.show()

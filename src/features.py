@@ -197,3 +197,36 @@ def feature_summary(feature_tensor: np.ndarray, feature_names: list[str]) -> dic
         "n_features": int(feature_tensor.shape[1]),
         "first_features": feature_names[:15],
     }
+
+
+def build_advanced_features(arrays: dict[str, np.ndarray]) -> pd.DataFrame:
+    """
+    Crée des features agrégées pour booster les modèles tabulaires.
+    """
+    features = {}
+    ghi = arrays["GHI"]  # (n, 4, 51, 51)
+    cls = arrays["CLS"]  # (n, 8, 51, 51)
+    
+    # 1. Statistiques Globales par frame (Moyenne/Std de l'image)
+    for t in range(4):
+        features[f"ghi_mean_t-{45-t*15}"] = ghi[:, t].mean(axis=(1, 2))
+        features[f"ghi_std_t-{45-t*15}"] = ghi[:, t].std(axis=(1, 2))
+
+    # 2. Dynamique (Différence temporelle) : Les nuages bougent-ils ?
+    # Différence entre la frame actuelle (t) et la précédente (t-1)
+    ghi_diff = ghi[:, 1:] - ghi[:, :-1]
+    for t in range(3):
+        features[f"ghi_diff_mean_t{t}"] = ghi_diff[:, t].mean(axis=(1, 2))
+
+    # 3. Clear Sky Index (CSI) moyen 
+    # Le CSI est plus stable que le GHI pour un modèle tabulaire
+    cls_past = cls[:, :4]
+    csi = ghi / (cls_past + 1e-6)
+    features["csi_last_frame_mean"] = csi[:, -1].mean(axis=(1, 2))
+    
+    # 4. Position du soleil (SZA moyen sur la zone)
+    sza_future = arrays["SZA"][:, 4:] # Les 4 horizons futurs
+    for t in range(4):
+        features[f"sza_future_t+{15+t*15}"] = sza_future[:, t].mean(axis=(1, 2))
+
+    return pd.DataFrame(features)
